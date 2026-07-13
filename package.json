@@ -1,0 +1,8 @@
+{
+  "name": "lottie.js",
+  "version": "0.0.0",
+  "description": "A fast, dependency-free Lottie engine for every JavaScript runtime and environment",
+  "type": "module",
+  "license": "MIT",
+  "author": "sanyok12345 <justsanyok12345@gmail.com>"
+}
