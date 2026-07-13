@@ -1,0 +1,88 @@
+import type { PathData } from '../ir.js';
+
+export type AnimValue = number | number[] | PathData;
+
+export interface EaseHandle {
+  x?: number | number[];
+  y?: number | number[];
+}
+
+export interface Keyframe {
+  t: number;
+  s?: any;
+  e?: any;
+  h?: number;
+  i?: EaseHandle;
+  o?: EaseHandle;
+  to?: number[];
+  ti?: number[];
+}
+
+export interface Animatable {
+  a?: number;
+  k?: any;
+  s?: boolean | Animatable;
+  x?: Animatable;
+  y?: Animatable;
+  [key: string]: any;
+}
+
+export interface ShapeItem {
+  ty?: string;
+  hd?: boolean;
+  it?: ShapeItem[];
+  [key: string]: any;
+}
+
+export interface Transform {
+  [key: string]: any;
+}
+
+export interface Layer {
+  ty?: number;
+  ind?: number;
+  parent?: number;
+  hd?: boolean;
+  ip?: number;
+  op?: number;
+  st?: number;
+  sr?: number;
+  ks?: Transform;
+  shapes?: ShapeItem[];
+  refId?: string;
+  tm?: Animatable;
+  w?: number;
+  h?: number;
+  sw?: number;
+  sh?: number;
+  sc?: string;
+  [key: string]: any;
+}
+
+export interface Asset {
+  id: string;
+  layers?: Layer[];
+  w?: number;
+  h?: number;
+  [key: string]: any;
+}
+
+export interface Marker {
+  cm?: string;
+  tm?: number;
+  dr?: number;
+}
+
+export interface LottieData {
+  w: number;
+  h: number;
+  fr?: number;
+  ip?: number;
+  op?: number;
+  layers: Layer[];
+  assets?: Asset[];
+  markers?: Marker[];
+  v?: string;
+  nm?: string;
+  [key: string]: any;
+}
