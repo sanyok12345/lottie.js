@@ -5,6 +5,7 @@ export interface RenderOptions {
   height?: number;
   dpr?: number;
   idPrefix?: string;
+  clear?: boolean;
 }
 
 export interface Surface<Out = void> {

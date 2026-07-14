@@ -14,6 +14,11 @@ export class CanvasSurface implements Surface<void> {
     const { sx, sy } = outputSize(scene.width, scene.height, options);
     const ctx = this.ctx;
     const base = ctx.getTransform();
+    if (options.clear !== false) {
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+      ctx.setTransform(base);
+    }
     const ba = base.a, bb = base.b, bc = base.c, bd = base.d, be = base.e, bf = base.f;
     const prevAlpha = ctx.globalAlpha;
 
