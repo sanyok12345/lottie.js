@@ -1,5 +1,5 @@
 import { sceneAt } from './scene/evaluate.js';
-import type { LottieData } from './model/types.js';
+import type { LottieData, Marker } from './model/types.js';
 import type { Scene } from './ir.js';
 
 export class Animation {
@@ -48,11 +48,19 @@ export class Animation {
     return this.frameRate ? this.totalFrames / this.frameRate : 0;
   }
 
+  get markers(): Marker[] {
+    return this.data.markers ?? [];
+  }
+
   frameAtTime(seconds: number): number {
     const total = this.totalFrames;
     if (!total) return this.inPoint;
     const f = (seconds * this.frameRate) % total;
     return this.inPoint + (f < 0 ? f + total : f);
+  }
+
+  frameAtProgress(t: number): number {
+    return this.inPoint + Math.min(1, Math.max(0, t)) * this.totalFrames;
   }
 
   sceneAt(frame: number = this.inPoint): Scene {
