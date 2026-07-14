@@ -1,6 +1,8 @@
 export { parse } from './parse.js';
+export { load } from './load.js';
 export { Animation } from './animation.js';
 export { Playback } from './playback.js';
+export { mount } from './mount.js';
 export { Emitter } from './events.js';
 export { CanvasSurface } from './surface/canvas.js';
 export { SvgSurface } from './surface/svg.js';
