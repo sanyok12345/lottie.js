@@ -34,6 +34,7 @@ function evaluateKeyframes(kfs: Keyframe[], frame: number): AnimValue | undefine
   const k0 = kfs[i];
   const k1 = kfs[i + 1];
   const v0 = keyValue(kfs, i);
+  if (k0.h === 1) return v0;
 
   const v1 = k0.e !== undefined ? unwrap(k0.e) : keyValue(kfs, i + 1);
   if (v0 === undefined || v1 === undefined) return v0 ?? v1;
