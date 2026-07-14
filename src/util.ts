@@ -1,6 +1,6 @@
 export function fmt(n: number): string {
   if (!Number.isFinite(n)) return '0';
-  const r = Math.round(n * 100) / 100;
+  const r = Math.round(n * 1000) / 1000;
   return Object.is(r, -0) ? '0' : String(r);
 }
 
