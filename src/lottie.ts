@@ -1,5 +1,7 @@
 export { parse } from './parse.js';
 export { Animation } from './animation.js';
+export { Playback } from './playback.js';
+export { Emitter } from './events.js';
 export { CanvasSurface } from './surface/canvas.js';
 export { SvgSurface } from './surface/svg.js';
 export { ImageSurface } from './surface/image/image.js';
