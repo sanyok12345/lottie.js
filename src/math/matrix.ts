@@ -31,6 +31,14 @@ export function skewX(deg: number): Matrix {
   return [1, 0, Math.tan((deg * Math.PI) / 180), 1, 0, 0];
 }
 
+export function invert(m: Matrix): Matrix {
+  const [a, b, c, d, e, f] = m;
+  const det = a * d - b * c;
+  if (!det) return identity();
+  const id = 1 / det;
+  return [d * id, -b * id, -c * id, a * id, (c * f - d * e) * id, (b * e - a * f) * id];
+}
+
 export const isIdentity = (m: Matrix): boolean =>
   m[0] === 1 && m[1] === 0 && m[2] === 0 && m[3] === 1 && m[4] === 0 && m[5] === 0;
 
