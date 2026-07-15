@@ -27,7 +27,7 @@ export function flattenPath(path: PathData, m: number[], out: Ring[]): void {
     const tb = inT[j % n] ?? [0, 0];
     flattenCubic(ring, a, ta, b, tb, m);
   }
-  if (ring.length >= 6) out.push(ring);
+  if (ring.length >= 4) out.push(ring);
 }
 
 function pushPoint(ring: Ring, p: number[], m: number[]): void {
