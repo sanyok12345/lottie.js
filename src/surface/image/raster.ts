@@ -8,8 +8,9 @@ import type { Clip, PathData, Scene } from '../../ir.js';
 const flattenCache = new WeakMap<PathData, { key: string; rings: Ring[] }>();
 
 export function rasterize(scene: Scene, options: RenderOptions = {}): RGBAImage {
-  const width = Math.max(1, Math.round(Number(options.width ?? scene.width ?? 512)));
-  const height = Math.max(1, Math.round(Number(options.height ?? scene.height ?? 512)));
+  const dpr = Number(options.dpr ?? 1) || 1;
+  const width = Math.max(1, Math.round(Number(options.width ?? scene.width ?? 512) * dpr));
+  const height = Math.max(1, Math.round(Number(options.height ?? scene.height ?? 512) * dpr));
   const r = getRaster(width, height);
   r.clear();
 

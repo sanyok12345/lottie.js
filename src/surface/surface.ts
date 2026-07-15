@@ -20,7 +20,8 @@ export function outputSize(
   sceneH: number,
   opts: RenderOptions
 ): { width: number; height: number; sx: number; sy: number } {
-  const width = Number(opts.width ?? sceneW);
-  const height = Number(opts.height ?? sceneH);
+  const dpr = Number(opts.dpr ?? 1) || 1;
+  const width = Number(opts.width ?? sceneW) * dpr;
+  const height = Number(opts.height ?? sceneH) * dpr;
   return { width, height, sx: width / (sceneW || width), sy: height / (sceneH || height) };
 }
