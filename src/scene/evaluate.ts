@@ -1,14 +1,26 @@
 import { evaluate, isStatic, scalar } from '../model/property.js';
-import { multiply, type Matrix } from '../math/matrix.js';
+import { invert, multiply, rotation, scaling, translation, type Matrix } from '../math/matrix.js';
 import { hexToRgb, to255 } from '../math/color.js';
 import { safeHexColor } from '../util.js';
-import { transformMatrix, transformOpacity } from './transform.js';
-import { ellipsePath, rectPath } from './shape.js';
+import { positionAt, transformMatrix, transformOpacity } from './transform.js';
+import { ellipsePath, polystarPath, rectPath, reversePath } from './shape.js';
+import { offsetPath, puckerBloat, roundCorners, trimPaths, twist, zigZag } from './modifiers.js';
 import type { Asset, Layer, LottieData, ShapeItem, Transform } from '../model/types.js';
-import type { ColorPaint, DrawOp, FillPaint, GradientStop, PathData, Scene } from '../ir.js';
+import type {
+  Clip,
+  ClipShape,
+  DrawOp,
+  FillPaint,
+  GradientPaint,
+  GradientStop,
+  PathData,
+  Scene,
+  StrokePaint,
+} from '../ir.js';
 
 const TY_PRECOMP = 0;
 const TY_SOLID = 1;
+const TY_IMAGE = 2;
 const TY_NULL = 3;
 const TY_SHAPE = 4;
 
@@ -58,6 +70,24 @@ function cachedTransformMatrix(ks: Transform, frame: number): Matrix {
   return m;
 }
 
+function autoOrientAngle(layer: Layer, frame: number): number {
+  if (layer.ao !== 1 || !layer.ks?.p) return 0;
+  const p = layer.ks.p;
+  if (p.s ? isStatic(p.x) && isStatic(p.y) : isStatic(p)) return 0;
+  const [x0, y0] = positionAt(layer.ks, frame - 0.5);
+  const [x1, y1] = positionAt(layer.ks, frame + 0.5);
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+  if (!dx && !dy) return 0;
+  return (Math.atan2(dy, dx) * 180) / Math.PI;
+}
+
+function layerMatrix(layer: Layer, local: number): Matrix {
+  const ao = autoOrientAngle(layer, local);
+  if (ao) return transformMatrix(layer.ks ?? {}, local, ao);
+  return cachedTransformMatrix(layer.ks ?? {}, local);
+}
+
 function chainStatic(layer: Layer, byInd: Map<number, Layer>): boolean {
   const cached = chainCache.get(layer);
   if (cached !== undefined) return cached;
@@ -88,10 +118,77 @@ function cachedGeom(item: ShapeItem, build: () => PathData): PathData {
 function layers(list: Layer[], frame: number, ctx: Ctx): void {
   const byInd = new Map<number, Layer>();
   for (const l of list) if (l.ind !== undefined) byInd.set(l.ind, l);
-  for (let i = list.length - 1; i >= 0; i--) layer(list[i], byInd, frame, ctx);
+  for (let i = list.length - 1; i >= 0; i--) {
+    const l = list[i];
+    if (l.td === 1) continue;
+    let matte: Clip[] | undefined;
+    if (l.tt) {
+      const src = l.tp !== undefined ? byInd.get(l.tp) : list[i - 1];
+      if (src) matte = matteClips(src, byInd, frame, ctx, l.tt);
+    }
+    layer(l, byInd, frame, ctx, matte);
+  }
 }
 
-function layer(layer: Layer, byInd: Map<number, Layer>, frame: number, ctx: Ctx): void {
+function matteClips(
+  src: Layer,
+  byInd: Map<number, Layer>,
+  frame: number,
+  ctx: Ctx,
+  tt: number
+): Clip[] {
+  const sub: Ctx = { assets: ctx.assets, frameRate: ctx.frameRate, ops: [], depth: ctx.depth };
+  layer(src, byInd, frame, sub);
+  const shapes: ClipShape[] = [];
+  for (const op of sub.ops) {
+    if (op.kind === 'shape' && op.paths.length) shapes.push({ paths: op.paths, matrix: op.matrix });
+  }
+  const inverted = tt === 2 || tt === 4;
+  if (!shapes.length) return inverted ? [] : [{ shapes: [], mode: 1 }];
+  return [{ shapes, mode: inverted ? 2 : 1 }];
+}
+
+function maskClips(layer: Layer, m: Matrix, frame: number): Clip[] {
+  const list = layer.masksProperties;
+  if (!Array.isArray(list) || !list.length) return [];
+  const clips: Clip[] = [];
+  let add: ClipShape[] = [];
+  const flushAdd = (): void => {
+    if (add.length) {
+      clips.push({ shapes: add, mode: 1 });
+      add = [];
+    }
+  };
+  for (const mk of list) {
+    if (!mk || mk.mode === 'n') continue;
+    const pd = evaluate(mk.pt, frame) as PathData | undefined;
+    if (!pd || !Array.isArray(pd.v) || !pd.v.length) continue;
+    const shape: ClipShape = { paths: [pd], matrix: m };
+    const inv = !!mk.inv;
+    if (mk.mode === 's') {
+      flushAdd();
+      clips.push({ shapes: [shape], mode: inv ? 1 : 2 });
+    } else if (mk.mode === 'i') {
+      flushAdd();
+      clips.push({ shapes: [shape], mode: inv ? 2 : 1 });
+    } else if (inv) {
+      flushAdd();
+      clips.push({ shapes: [shape], mode: 2 });
+    } else {
+      add.push(shape);
+    }
+  }
+  flushAdd();
+  return clips;
+}
+
+function layer(
+  layer: Layer,
+  byInd: Map<number, Layer>,
+  frame: number,
+  ctx: Ctx,
+  extraClips?: Clip[]
+): void {
   if (layer.hd || layer.ty === TY_NULL) return;
   if (frame < (layer.ip ?? 0) || frame >= (layer.op ?? Infinity)) return;
 
@@ -100,19 +197,21 @@ function layer(layer: Layer, byInd: Map<number, Layer>, frame: number, ctx: Ctx)
   if (opacity <= 0) return;
 
   const staticMx = chainStatic(layer, byInd);
-  let m = cachedTransformMatrix(layer.ks ?? {}, local);
+  let m = layerMatrix(layer, local);
   let node = layer;
   let guard = 0;
   while (node.parent !== undefined && guard++ < 100) {
     const parent = byInd.get(node.parent);
     if (!parent) break;
-    m = multiply(cachedTransformMatrix(parent.ks ?? {}, localFrame(parent, frame)), m);
+    m = multiply(layerMatrix(parent, localFrame(parent, frame)), m);
     node = parent;
   }
 
+  const start = ctx.ops.length;
+
   switch (layer.ty) {
     case TY_SHAPE:
-      shapeItems(layer.shapes ?? [], local, m, opacity, staticMx, ctx);
+      shapeItems(layer.shapes ?? [], local, m, opacity, staticMx, ctx, []);
       break;
     case TY_PRECOMP: {
       if (ctx.depth > 20) return;
@@ -121,15 +220,31 @@ function layer(layer: Layer, byInd: Map<number, Layer>, frame: number, ctx: Ctx)
       let childFrame = local;
       if (layer.tm) childFrame = (scalar(evaluate(layer.tm, local)) ?? 0) * ctx.frameRate;
       ctx.depth++;
-      const before = ctx.ops.length;
       layers(asset.layers, childFrame, ctx);
       ctx.depth--;
-      for (let i = before; i < ctx.ops.length; i++) {
+      const w = layer.w ?? asset.w ?? 0;
+      const h = layer.h ?? asset.h ?? 0;
+      const clipStage: Clip | null =
+        w && h
+          ? { shapes: [{ paths: [rectPath([w / 2, h / 2], [w, h], 0)], matrix: m }], mode: 1 }
+          : null;
+      for (let i = start; i < ctx.ops.length; i++) {
         const op = ctx.ops[i];
         op.matrix = multiply(m, op.matrix);
         op.static = op.static && staticMx;
-        for (const p of op.fills) p.alpha *= opacity;
-        for (const p of op.strokes) p.alpha *= opacity;
+        if (op.kind === 'shape') {
+          for (const p of op.fills) p.alpha *= opacity;
+          for (const p of op.strokes) p.alpha *= opacity;
+        } else {
+          op.alpha *= opacity;
+        }
+        if (op.clips) {
+          op.clips = op.clips.map((c) => ({
+            mode: c.mode,
+            shapes: c.shapes.map((s) => ({ ...s, matrix: multiply(m, s.matrix) })),
+          }));
+        }
+        if (clipStage) op.clips = op.clips ? [...op.clips, clipStage] : [clipStage];
       }
       break;
     }
@@ -138,6 +253,7 @@ function layer(layer: Layer, byInd: Map<number, Layer>, frame: number, ctx: Ctx)
       const h = layer.sh ?? 0;
       if (!w || !h) return;
       ctx.ops.push({
+        kind: 'shape',
         paths: [rectPath([w / 2, h / 2], [w, h], 0)],
         matrix: m,
         fills: [{ kind: 'color', color: hexToRgb(safeHexColor(layer.sc)), alpha: opacity, rule: 1 }],
@@ -146,13 +262,184 @@ function layer(layer: Layer, byInd: Map<number, Layer>, frame: number, ctx: Ctx)
       });
       break;
     }
+    case TY_IMAGE: {
+      const asset = ctx.assets.get(layer.refId as string);
+      if (!asset || typeof asset.p !== 'string' || !asset.p) return;
+      const src =
+        asset.e === 1 || asset.p.startsWith('data:') ? asset.p : (asset.u ?? '') + asset.p;
+      ctx.ops.push({
+        kind: 'image',
+        src,
+        assetId: asset.id,
+        width: asset.w ?? 0,
+        height: asset.h ?? 0,
+        matrix: m,
+        alpha: opacity,
+        static: staticMx,
+        paths: [],
+        fills: [],
+        strokes: [],
+      });
+      break;
+    }
     default:
       break;
+  }
+
+  const stages: Clip[] = extraClips ? [...extraClips] : [];
+  stages.push(...maskClips(layer, m, local));
+  const blend = typeof layer.bm === 'number' && layer.bm ? layer.bm : undefined;
+  if (stages.length || blend !== undefined) {
+    for (let i = start; i < ctx.ops.length; i++) {
+      const op = ctx.ops[i];
+      if (stages.length) op.clips = op.clips ? [...op.clips, ...stages] : stages.slice();
+      if (blend !== undefined && op.blend === undefined) op.blend = blend;
+    }
   }
 }
 
 function localFrame(layer: Layer, frame: number): number {
   return (frame - (layer.st ?? 0)) / (layer.sr || 1);
+}
+
+type Mod = (paths: PathData[], frame: number) => PathData[];
+
+function modOf(item: ShapeItem): Mod | null {
+  switch (item.ty) {
+    case 'tm':
+      return (paths, frame) =>
+        trimPaths(
+          paths,
+          (scalar(evaluate(item.s, frame)) ?? 0) / 100,
+          (scalar(evaluate(item.e, frame)) ?? 100) / 100,
+          (scalar(evaluate(item.o, frame)) ?? 0) / 360,
+          item.m !== 2
+        );
+    case 'rd':
+      return (paths, frame) => {
+        const r = scalar(evaluate(item.r, frame)) ?? 0;
+        return r > 0 ? paths.map((p) => roundCorners(p, r)) : paths;
+      };
+    case 'zz':
+      return (paths, frame) => {
+        const amp = scalar(evaluate(item.s, frame)) ?? 0;
+        const ridges = scalar(evaluate(item.r, frame)) ?? 1;
+        const smooth = (scalar(evaluate(item.pt, frame)) ?? 1) === 2;
+        return amp ? paths.map((p) => zigZag(p, amp, ridges, smooth)) : paths;
+      };
+    case 'pb':
+      return (paths, frame) => {
+        const a = scalar(evaluate(item.a, frame)) ?? 0;
+        return a ? paths.map((p) => puckerBloat(p, a)) : paths;
+      };
+    case 'tw':
+      return (paths, frame) => {
+        const a = scalar(evaluate(item.a, frame)) ?? 0;
+        const c = evaluate(item.c, frame) ?? [0, 0];
+        return a ? paths.map((p) => twist(p, a, c)) : paths;
+      };
+    case 'op':
+      return (paths, frame) => {
+        const a = scalar(evaluate(item.a, frame)) ?? 0;
+        const ml = scalar(evaluate(item.ml, frame)) ?? item.ml ?? 4;
+        return a ? paths.map((p) => offsetPath(p, a, ml)) : paths;
+      };
+    default:
+      return null;
+  }
+}
+
+function modStatic(item: ShapeItem): boolean {
+  switch (item.ty) {
+    case 'tm':
+      return isStatic(item.s) && isStatic(item.e) && isStatic(item.o);
+    case 'rd':
+      return isStatic(item.r);
+    case 'zz':
+      return isStatic(item.s) && isStatic(item.r) && isStatic(item.pt);
+    case 'pb':
+    case 'tw':
+      return isStatic(item.a) && isStatic(item.c);
+    case 'op':
+      return isStatic(item.a);
+    default:
+      return true;
+  }
+}
+
+function repeaterStatic(item: ShapeItem): boolean {
+  const tr = item.tr ?? {};
+  return (
+    isStatic(item.c) &&
+    isStatic(item.o) &&
+    isStatic(tr.p) &&
+    isStatic(tr.a) &&
+    isStatic(tr.s) &&
+    isStatic(tr.r) &&
+    isStatic(tr.so) &&
+    isStatic(tr.eo)
+  );
+}
+
+function repeaterMatrix(tr: Transform, n: number, frame: number): Matrix {
+  const p = evaluate(tr.p, frame) ?? [0, 0];
+  const a = evaluate(tr.a, frame) ?? [0, 0];
+  const s = evaluate(tr.s, frame) ?? [100, 100];
+  const r = scalar(evaluate(tr.r, frame)) ?? 0;
+  const ax = Array.isArray(a) ? a[0] ?? 0 : 0;
+  const ay = Array.isArray(a) ? a[1] ?? 0 : 0;
+  let m = translation((Array.isArray(p) ? p[0] ?? 0 : 0) * n, (Array.isArray(p) ? p[1] ?? 0 : 0) * n);
+  if (ax || ay) m = multiply(m, translation(ax, ay));
+  if (r) m = multiply(m, rotation(r * n));
+  const sx = Math.pow((Array.isArray(s) ? s[0] ?? 100 : 100) / 100, n);
+  const sy = Math.pow((Array.isArray(s) ? s[1] ?? s[0] ?? 100 : 100) / 100, n);
+  if (sx !== 1 || sy !== 1) m = multiply(m, scaling(sx, sy));
+  if (ax || ay) m = multiply(m, translation(-ax, -ay));
+  return m;
+}
+
+function clonePath(p: PathData): PathData {
+  return { c: p.c, v: p.v, i: p.i, o: p.o };
+}
+
+function applyRepeater(
+  item: ShapeItem,
+  frame: number,
+  groupMatrix: Matrix,
+  ctx: Ctx,
+  startIdx: number
+): void {
+  const count = Math.max(0, Math.round(scalar(evaluate(item.c, frame)) ?? 0));
+  const offset = scalar(evaluate(item.o, frame)) ?? 0;
+  const tr = item.tr ?? {};
+  const so = tr.so ? (scalar(evaluate(tr.so, frame)) ?? 100) / 100 : 1;
+  const eo = tr.eo ? (scalar(evaluate(tr.eo, frame)) ?? 100) / 100 : 1;
+  const originals = ctx.ops.splice(startIdx);
+  if (!count || !originals.length) return;
+  const inv = invert(groupMatrix);
+  const stat = repeaterStatic(item);
+  for (let k = 0; k < count; k++) {
+    const n = offset + k;
+    const world = multiply(multiply(groupMatrix, repeaterMatrix(tr, n, frame)), inv);
+    const alphaMul = count > 1 ? so + (eo - so) * (k / (count - 1)) : so;
+    for (const op of originals) {
+      const matrix = multiply(world, op.matrix);
+      if (op.kind === 'shape') {
+        ctx.ops.push({
+          kind: 'shape',
+          paths: k === 0 ? op.paths : op.paths.map(clonePath),
+          matrix,
+          fills: op.fills.map((f) => ({ ...f, alpha: f.alpha * alphaMul })),
+          strokes: op.strokes.map((s) => ({ ...s, alpha: s.alpha * alphaMul })),
+          clips: op.clips,
+          blend: op.blend,
+          static: op.static && stat,
+        });
+      } else {
+        ctx.ops.push({ ...op, matrix, alpha: op.alpha * alphaMul, static: op.static && stat });
+      }
+    }
+  }
 }
 
 function shapeItems(
@@ -161,12 +448,17 @@ function shapeItems(
   matrix: Matrix,
   opacity: number,
   staticMatrix: boolean,
-  ctx: Ctx
+  ctx: Ctx,
+  inherited: ShapeItem[]
 ): void {
+  const startOps = ctx.ops.length;
   const paths: PathData[] = [];
   const fills: FillPaint[] = [];
-  const strokes: ColorPaint[] = [];
+  const strokes: StrokePaint[] = [];
   const subgroups: ShapeItem[] = [];
+  const mods: ShapeItem[] = [...inherited];
+  const repeaters: ShapeItem[] = [];
+  let mergeMode = 0;
   let geomStatic = true;
 
   for (const item of items) {
@@ -176,22 +468,60 @@ function shapeItems(
         subgroups.push(item);
         break;
       case 'sh': {
-        const path = evaluate(item.ks, frame) as PathData | undefined;
-        if (path && Array.isArray(path.v) && path.v.length) paths.push(path);
+        let path = evaluate(item.ks, frame) as PathData | undefined;
+        if (path && Array.isArray(path.v) && path.v.length) {
+          if (item.d === 3) path = reversePath(path);
+          paths.push(path);
+        }
         if (!isStatic(item.ks)) geomStatic = false;
         break;
       }
       case 'el': {
         const st = isStatic(item.p) && isStatic(item.s);
-        const build = () => ellipsePath(evaluate(item.p, frame), evaluate(item.s, frame));
+        const build = () => {
+          const p = ellipsePath(evaluate(item.p, frame), evaluate(item.s, frame));
+          return item.d === 3 ? reversePath(p) : p;
+        };
         paths.push(st ? cachedGeom(item, build) : build());
         if (!st) geomStatic = false;
         break;
       }
       case 'rc': {
         const st = isStatic(item.p) && isStatic(item.s) && isStatic(item.r);
-        const build = () =>
-          rectPath(evaluate(item.p, frame), evaluate(item.s, frame), scalar(evaluate(item.r, frame)) ?? 0);
+        const build = () => {
+          const p = rectPath(
+            evaluate(item.p, frame),
+            evaluate(item.s, frame),
+            scalar(evaluate(item.r, frame)) ?? 0
+          );
+          return item.d === 3 ? reversePath(p) : p;
+        };
+        paths.push(st ? cachedGeom(item, build) : build());
+        if (!st) geomStatic = false;
+        break;
+      }
+      case 'sr': {
+        const st =
+          isStatic(item.p) &&
+          isStatic(item.pt) &&
+          isStatic(item.r) &&
+          isStatic(item.or) &&
+          isStatic(item.ir) &&
+          isStatic(item.os) &&
+          isStatic(item.is);
+        const build = () => {
+          const p = polystarPath(
+            evaluate(item.p, frame),
+            scalar(evaluate(item.pt, frame)) ?? 5,
+            scalar(evaluate(item.r, frame)) ?? 0,
+            scalar(evaluate(item.or, frame)) ?? 0,
+            scalar(evaluate(item.ir, frame)) ?? 0,
+            scalar(evaluate(item.os, frame)) ?? 0,
+            scalar(evaluate(item.is, frame)) ?? 0,
+            item.sy !== 2
+          );
+          return item.d === 3 ? reversePath(p) : p;
+        };
         paths.push(st ? cachedGeom(item, build) : build());
         if (!st) geomStatic = false;
         break;
@@ -205,32 +535,54 @@ function shapeItems(
         });
         break;
       case 'gf': {
-        const stops = gradientStops(item.g, frame);
-        if (stops.length) {
-          fills.push({
-            kind: item.t === 2 ? 'radial' : 'linear',
-            s: evaluate(item.s, frame) ?? [0, 0],
-            e: evaluate(item.e, frame) ?? [0, 0],
-            stops,
-            alpha: opacityOf(item, frame) * opacity,
-            rule: item.r === 2 ? 2 : 1,
-          });
-        }
+        const g = gradientPaint(item, frame, opacityOf(item, frame) * opacity);
+        if (g) fills.push(g);
         break;
       }
-      case 'st':
+      case 'st': {
         strokes.push({
           kind: 'color',
           color: colorOf(evaluate(item.c, frame)),
-          alpha: opacityOf(item, frame) * opacity,
-          width: scalar(evaluate(item.w, frame)) ?? 1,
-          cap: item.lc ?? 1,
-          join: item.lj ?? 1,
+          ...strokeBase(item, frame, opacity),
         });
+        break;
+      }
+      case 'gs': {
+        const g = gradientPaint(item, frame, 1);
+        if (g) {
+          const base = strokeBase(item, frame, opacity);
+          strokes.push({ ...g, ...base, alpha: base.alpha });
+        }
+        break;
+      }
+      case 'tm':
+      case 'rd':
+      case 'zz':
+      case 'pb':
+      case 'tw':
+      case 'op': {
+        mods.push(item);
+        if (!modStatic(item)) geomStatic = false;
+        break;
+      }
+      case 'rp':
+        repeaters.push(item);
+        break;
+      case 'mm':
+        mergeMode = item.mm ?? 1;
         break;
       default:
         break;
     }
+  }
+
+  let outPaths = paths;
+  if (mergeMode === 3 && outPaths.length > 1) {
+    outPaths = [outPaths[0], ...outPaths.slice(1).map(reversePath)];
+  }
+  for (const item of mods) {
+    const mod = modOf(item);
+    if (mod) outPaths = mod(outPaths, frame);
   }
 
   for (let i = subgroups.length - 1; i >= 0; i--) {
@@ -241,12 +593,78 @@ function shapeItems(
     const groupOpacity = tr ? opacity * transformOpacity(tr, frame) : opacity;
     if (groupOpacity <= 0) continue;
     const groupStatic = tr ? staticMatrix && isStaticTransform(tr) : staticMatrix;
-    shapeItems(groupItems, frame, groupMatrix, groupOpacity, groupStatic, ctx);
+    shapeItems(groupItems, frame, groupMatrix, groupOpacity, groupStatic, ctx, mods);
   }
 
-  if (paths.length && (fills.length || strokes.length)) {
-    ctx.ops.push({ paths, matrix, fills, strokes, static: staticMatrix && geomStatic });
+  if (outPaths.length && (fills.length || strokes.length)) {
+    if (mergeMode === 5) {
+      for (const f of fills) f.rule = 2;
+    }
+    ctx.ops.push({
+      kind: 'shape',
+      paths: outPaths,
+      matrix,
+      fills,
+      strokes,
+      static: staticMatrix && geomStatic,
+    });
   }
+
+  for (let i = repeaters.length - 1; i >= 0; i--) {
+    applyRepeater(repeaters[i], frame, matrix, ctx, startOps);
+  }
+}
+
+function strokeBase(item: ShapeItem, frame: number, opacity: number) {
+  const base: {
+    alpha: number;
+    width: number;
+    cap: number;
+    join: number;
+    miter?: number;
+    dash?: number[];
+    dashOffset?: number;
+  } = {
+    alpha: opacityOf(item, frame) * opacity,
+    width: scalar(evaluate(item.w, frame)) ?? 1,
+    cap: item.lc ?? 1,
+    join: item.lj ?? 1,
+  };
+  if (typeof item.ml === 'number' && item.ml) base.miter = item.ml;
+  if (Array.isArray(item.d) && item.d.length) {
+    const arr: number[] = [];
+    let off = 0;
+    for (const seg of item.d) {
+      const val = scalar(evaluate(seg?.v, frame)) ?? 0;
+      if (seg?.n === 'o') off = val;
+      else arr.push(Math.max(0, val));
+    }
+    if (arr.some((v) => v > 0)) {
+      base.dash = arr;
+      if (off) base.dashOffset = off;
+    }
+  }
+  return base;
+}
+
+function gradientPaint(item: ShapeItem, frame: number, alpha: number): GradientPaint | null {
+  const stops = gradientStops(item.g, frame);
+  if (!stops.length) return null;
+  const g: GradientPaint = {
+    kind: item.t === 2 ? 'radial' : 'linear',
+    s: evaluate(item.s, frame) ?? [0, 0],
+    e: evaluate(item.e, frame) ?? [0, 0],
+    stops,
+    alpha,
+    rule: item.r === 2 ? 2 : 1,
+  };
+  if (item.t === 2) {
+    const h = scalar(evaluate(item.h, frame));
+    const a = scalar(evaluate(item.a, frame));
+    if (h) g.h = Math.max(-0.99, Math.min(0.99, h / 100));
+    if (a) g.a = a;
+  }
+  return g;
 }
 
 function opacityOf(item: ShapeItem, frame: number): number {

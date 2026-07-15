@@ -10,24 +10,21 @@ import {
 import { evaluate, scalar } from '../model/property.js';
 import type { Transform } from '../model/types.js';
 
-export function transformMatrix(ks: Transform = {}, frame: number): Matrix {
+export function positionAt(ks: Transform = {}, frame: number): [number, number] {
+  if (!ks.p) return [0, 0];
+  if (ks.p.s) {
+    return [scalar(evaluate(ks.p.x, frame)) ?? 0, scalar(evaluate(ks.p.y, frame)) ?? 0];
+  }
+  const p = evaluate(ks.p, frame);
+  return Array.isArray(p) ? [p[0] ?? 0, p[1] ?? 0] : [0, 0];
+}
+
+export function transformMatrix(ks: Transform = {}, frame: number, autoOrient = 0): Matrix {
   let m = identity();
 
-  let px = 0;
-  let py = 0;
-  if (ks.p) {
-    if (ks.p.s) {
-      px = scalar(evaluate(ks.p.x, frame)) ?? 0;
-      py = scalar(evaluate(ks.p.y, frame)) ?? 0;
-    } else {
-      const p = evaluate(ks.p, frame);
-      if (Array.isArray(p)) {
-        px = p[0] ?? 0;
-        py = p[1] ?? 0;
-      }
-    }
-  }
+  const [px, py] = positionAt(ks, frame);
   if (px || py) m = multiply(m, translation(px, py));
+  if (autoOrient) m = multiply(m, rotation(autoOrient));
 
   const r = ks.r ? scalar(evaluate(ks.r, frame)) ?? 0 : 0;
   if (r) m = multiply(m, rotation(r));

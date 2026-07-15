@@ -18,7 +18,12 @@ export type { Matrix } from './math/matrix.js';
 export type {
   Scene,
   DrawOp,
+  ShapeOp,
+  ImageOp,
+  Clip,
+  ClipShape,
   FillPaint,
+  StrokePaint,
   ColorPaint,
   GradientPaint,
   GradientStop,
