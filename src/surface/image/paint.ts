@@ -1,10 +1,10 @@
-import type { ColorPaint, FillPaint } from '../../ir.js';
+import type { FillPaint, StrokePaint } from '../../ir.js';
 
 export const LUT_SIZE = 256;
 
 export type DevicePaint = any;
 
-export function devicePaint(paint: FillPaint | ColorPaint, m: number[]): DevicePaint {
+export function devicePaint(paint: FillPaint | StrokePaint, m: number[]): DevicePaint {
   if (paint.kind === 'color') {
     return { grad: null, r: paint.color[0], g: paint.color[1], b: paint.color[2], a: paint.alpha };
   }
@@ -38,6 +38,12 @@ export function devicePaint(paint: FillPaint | ColorPaint, m: number[]): DeviceP
 
   if (paint.kind === 'radial') {
     const radius = Math.hypot(ex - sx, ey - sy) || 1e-6;
+    if (paint.h) {
+      const ang = Math.atan2(ey - sy, ex - sx) + ((paint.a ?? 0) * Math.PI) / 180;
+      const fx = sx + Math.cos(ang) * paint.h * radius;
+      const fy = sy + Math.sin(ang) * paint.h * radius;
+      return { grad: 'focal', lut, cx: sx, cy: sy, fx, fy, r: radius };
+    }
     return { grad: 'radial', lut, gx: sx, gy: sy, invR: 1 / radius };
   }
   const dx = ex - sx;

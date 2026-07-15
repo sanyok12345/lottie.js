@@ -1,4 +1,5 @@
 import type { Animation } from '../animation.js';
+import type { RGBAImage } from '../types.js';
 
 export interface RenderOptions {
   width?: number;
@@ -6,6 +7,7 @@ export interface RenderOptions {
   dpr?: number;
   idPrefix?: string;
   clear?: boolean;
+  images?: Record<string, RGBAImage>;
 }
 
 export interface Surface<Out = void> {

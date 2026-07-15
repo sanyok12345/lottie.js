@@ -1,5 +1,6 @@
 import { LUT_SIZE, type DevicePaint } from './paint.js';
 import type { Ring } from './flatten.js';
+import type { RGBAImage } from '../../types.js';
 
 const SUBS = 4;
 const SUB_COVER = 1 / SUBS;
@@ -10,6 +11,26 @@ export function getRaster(w: number, h: number): Raster {
   if (!cached || cached.w !== w || cached.h !== h) cached = new Raster(w, h);
   return cached;
 }
+
+type BlendFn = (b: number, s: number) => number;
+
+const BLENDS: Record<number, BlendFn> = {
+  1: (b, s) => b * s,
+  2: (b, s) => b + s - b * s,
+  3: (b, s) => (b <= 0.5 ? 2 * b * s : 1 - 2 * (1 - b) * (1 - s)),
+  4: (b, s) => Math.min(b, s),
+  5: (b, s) => Math.max(b, s),
+  6: (b, s) => (b === 0 ? 0 : s === 1 ? 1 : Math.min(1, b / (1 - s))),
+  7: (b, s) => (b === 1 ? 1 : s === 0 ? 0 : 1 - Math.min(1, (1 - b) / s)),
+  8: (b, s) => (s <= 0.5 ? 2 * b * s : 1 - 2 * (1 - b) * (1 - s)),
+  9: (b, s) =>
+    s <= 0.5
+      ? b - (1 - 2 * s) * b * (1 - b)
+      : b + (2 * s - 1) * ((b <= 0.25 ? ((16 * b - 12) * b + 4) * b : Math.sqrt(b)) - b),
+  10: (b, s) => Math.abs(b - s),
+  11: (b, s) => b + s - 2 * b * s,
+  16: (b, s) => Math.min(1, b + s),
+};
 
 export class Raster {
   w: number;
@@ -27,6 +48,8 @@ export class Raster {
   xs: Float64Array;
   ws: Int8Array;
   active: Int32Array;
+  private clipBuf: Float32Array | null = null;
+  private stageBuf: Float32Array | null = null;
 
   constructor(w: number, h: number) {
     this.w = w;
@@ -55,7 +78,53 @@ export class Raster {
     this.buf.fill(0);
   }
 
-  fillRings(rings: Ring[], rule: number, paint: DevicePaint): void {
+  acquireClipBuf(): Float32Array {
+    if (!this.clipBuf) this.clipBuf = new Float32Array(this.w * this.h);
+    this.clipBuf.fill(1);
+    return this.clipBuf;
+  }
+
+  acquireStageBuf(): Float32Array {
+    if (!this.stageBuf) this.stageBuf = new Float32Array(this.w * this.h);
+    this.stageBuf.fill(0);
+    return this.stageBuf;
+  }
+
+  fillRings(
+    rings: Ring[],
+    rule: number,
+    paint: DevicePaint,
+    clip: Float32Array | null = null,
+    blend = 0
+  ): void {
+    const blendFn = blend ? BLENDS[blend] : undefined;
+    this.scan(rings, rule, paint, clip, blendFn, null);
+  }
+
+  coverageRings(rings: Ring[], out: Float32Array): void {
+    this.scan(rings, 1, null, null, undefined, out);
+  }
+
+  private coverageRow(py: number, x0: number, x1: number, out: Float32Array): void {
+    const cov = this.cov;
+    const off = py * this.w;
+    for (let x = x0; x <= x1; x++) {
+      const c = cov[x];
+      if (c > 0) {
+        cov[x] = 0;
+        out[off + x] = c > 1 ? 1 : c;
+      }
+    }
+  }
+
+  private scan(
+    rings: Ring[],
+    rule: number,
+    paint: DevicePaint,
+    clip: Float32Array | null,
+    blendFn: BlendFn | undefined,
+    covOut: Float32Array | null
+  ): void {
     const { w, h } = this;
 
     let ne = 0;
@@ -177,24 +246,79 @@ export class Raster {
         }
       }
 
-      if (rowMax >= rowMin) this.blendRow(py, rowMin, rowMax, paint);
+      if (rowMax >= rowMin) {
+        if (covOut) this.coverageRow(py, rowMin, rowMax, covOut);
+        else if (blendFn) this.blendRowMixed(py, rowMin, rowMax, paint, clip, blendFn);
+        else this.blendRow(py, rowMin, rowMax, paint, clip);
+      }
     }
   }
 
-  blendRow(py: number, x0: number, x1: number, paint: DevicePaint): void {
+  private gradT(paint: DevicePaint, x: number, py: number): number {
+    let t: number;
+    if (paint.grad === 'focal') {
+      const dx = x + 0.5 - paint.fx;
+      const dy = py + 0.5 - paint.fy;
+      const fcx = paint.fx - paint.cx;
+      const fcy = paint.fy - paint.cy;
+      const dd = dx * dx + dy * dy;
+      if (!dd) return 0;
+      const dfc = dx * fcx + dy * fcy;
+      const disc = dfc * dfc - dd * (fcx * fcx + fcy * fcy - paint.r * paint.r);
+      const denom = -dfc + Math.sqrt(Math.max(0, disc));
+      t = denom > 0 ? dd / denom : 1;
+    } else if (paint.grad === 'radial') {
+      const dx = x + 0.5 - paint.gx;
+      const dy = py + 0.5 - paint.gy;
+      t = Math.sqrt(dx * dx + dy * dy) * paint.invR;
+    } else {
+      t = (x + 0.5 - paint.gx) * paint.gdx + (py + 0.5 - paint.gy) * paint.gdy;
+    }
+    if (t < 0) return 0;
+    if (t > 1) return 1;
+    return t;
+  }
+
+  blendRow(
+    py: number,
+    x0: number,
+    x1: number,
+    paint: DevicePaint,
+    clip: Float32Array | null
+  ): void {
     const { buf, cov, w } = this;
     const rowOff = py * w * 4;
+    const clipOff = py * w;
 
     if (!paint.grad) {
       const pa = paint.a;
       const pr = paint.r;
       const pg = paint.g;
       const pb = paint.b;
+      if (!clip) {
+        for (let x = x0; x <= x1; x++) {
+          let c = cov[x];
+          if (c > 0) {
+            cov[x] = 0;
+            if (c > 1) c = 1;
+            const a = c * pa;
+            const ia = 1 - a;
+            const idx = rowOff + x * 4;
+            buf[idx] = buf[idx] * ia + pr * a;
+            buf[idx + 1] = buf[idx + 1] * ia + pg * a;
+            buf[idx + 2] = buf[idx + 2] * ia + pb * a;
+            buf[idx + 3] = buf[idx + 3] * ia + 255 * a;
+          }
+        }
+        return;
+      }
       for (let x = x0; x <= x1; x++) {
         let c = cov[x];
         if (c > 0) {
           cov[x] = 0;
           if (c > 1) c = 1;
+          c *= clip[clipOff + x];
+          if (c <= 0) continue;
           const a = c * pa;
           const ia = 1 - a;
           const idx = rowOff + x * 4;
@@ -208,23 +332,17 @@ export class Raster {
     }
 
     const lut = paint.lut;
-    const radial = paint.grad === 'radial';
     for (let x = x0; x <= x1; x++) {
       let c = cov[x];
       if (c <= 0) continue;
       cov[x] = 0;
       if (c > 1) c = 1;
-
-      let t;
-      if (radial) {
-        const dx = x + 0.5 - paint.gx;
-        const dy = py + 0.5 - paint.gy;
-        t = Math.sqrt(dx * dx + dy * dy) * paint.invR;
-      } else {
-        t = (x + 0.5 - paint.gx) * paint.gdx + (py + 0.5 - paint.gy) * paint.gdy;
+      if (clip) {
+        c *= clip[clipOff + x];
+        if (c <= 0) continue;
       }
-      if (t < 0) t = 0;
-      else if (t > 1) t = 1;
+
+      const t = this.gradT(paint, x, py);
       const li = (t * (LUT_SIZE - 1)) << 2;
 
       const a = (lut[li + 3] / 255) * c;
@@ -234,6 +352,166 @@ export class Raster {
       buf[idx + 1] = buf[idx + 1] * ia + lut[li + 1] * c;
       buf[idx + 2] = buf[idx + 2] * ia + lut[li + 2] * c;
       buf[idx + 3] = buf[idx + 3] * ia + 255 * a;
+    }
+  }
+
+  private blendRowMixed(
+    py: number,
+    x0: number,
+    x1: number,
+    paint: DevicePaint,
+    clip: Float32Array | null,
+    blendFn: BlendFn
+  ): void {
+    const { buf, cov, w } = this;
+    const rowOff = py * w * 4;
+    const clipOff = py * w;
+    const lut = paint.grad ? paint.lut : null;
+
+    for (let x = x0; x <= x1; x++) {
+      let c = cov[x];
+      if (c <= 0) continue;
+      cov[x] = 0;
+      if (c > 1) c = 1;
+      if (clip) c *= clip[clipOff + x];
+      if (c <= 0) continue;
+
+      let sr: number;
+      let sg: number;
+      let sb: number;
+      let as: number;
+      if (lut) {
+        const t = this.gradT(paint, x, py);
+        const li = (t * (LUT_SIZE - 1)) << 2;
+        const la = lut[li + 3] / 255;
+        as = la * c;
+        sr = la > 0 ? lut[li] / 255 / la : 0;
+        sg = la > 0 ? lut[li + 1] / 255 / la : 0;
+        sb = la > 0 ? lut[li + 2] / 255 / la : 0;
+      } else {
+        as = paint.a * c;
+        sr = paint.r / 255;
+        sg = paint.g / 255;
+        sb = paint.b / 255;
+      }
+      if (as <= 0) continue;
+
+      const idx = rowOff + x * 4;
+      const ab = buf[idx + 3] / 255;
+      const br = ab > 0 ? buf[idx] / 255 / ab : 0;
+      const bg = ab > 0 ? buf[idx + 1] / 255 / ab : 0;
+      const bb = ab > 0 ? buf[idx + 2] / 255 / ab : 0;
+
+      const rr = as * (1 - ab) * sr + as * ab * blendFn(br, sr) + (1 - as) * ab * br;
+      const rg = as * (1 - ab) * sg + as * ab * blendFn(bg, sg) + (1 - as) * ab * bg;
+      const rb = as * (1 - ab) * sb + as * ab * blendFn(bb, sb) + (1 - as) * ab * bb;
+      const ra = as + ab * (1 - as);
+
+      buf[idx] = rr * 255;
+      buf[idx + 1] = rg * 255;
+      buf[idx + 2] = rb * 255;
+      buf[idx + 3] = ra * 255;
+    }
+  }
+
+  drawImage(
+    img: RGBAImage,
+    m: number[],
+    alpha: number,
+    clip: Float32Array | null,
+    blend = 0
+  ): void {
+    const { buf, w, h } = this;
+    const det = m[0] * m[3] - m[1] * m[2];
+    if (!det) return;
+    const id = 1 / det;
+    const i0 = m[3] * id;
+    const i1 = -m[1] * id;
+    const i2 = -m[2] * id;
+    const i3 = m[0] * id;
+    const i4 = (m[2] * m[5] - m[3] * m[4]) * id;
+    const i5 = (m[1] * m[4] - m[0] * m[5]) * id;
+
+    let minX = w;
+    let minY = h;
+    let maxX = 0;
+    let maxY = 0;
+    for (const [cx, cy] of [[0, 0], [img.width, 0], [0, img.height], [img.width, img.height]]) {
+      const dx = m[0] * cx + m[2] * cy + m[4];
+      const dy = m[1] * cx + m[3] * cy + m[5];
+      if (dx < minX) minX = dx;
+      if (dx > maxX) maxX = dx;
+      if (dy < minY) minY = dy;
+      if (dy > maxY) maxY = dy;
+    }
+    const x0 = Math.max(0, Math.floor(minX));
+    const x1 = Math.min(w - 1, Math.ceil(maxX));
+    const y0 = Math.max(0, Math.floor(minY));
+    const y1 = Math.min(h - 1, Math.ceil(maxY));
+
+    const data = img.data;
+    const iw = img.width;
+    const ih = img.height;
+    const blendFn = blend ? BLENDS[blend] : undefined;
+
+    for (let py = y0; py <= y1; py++) {
+      const clipOff = py * w;
+      for (let px = x0; px <= x1; px++) {
+        const cx = px + 0.5;
+        const cy = py + 0.5;
+        const u = i0 * cx + i2 * cy + i4 - 0.5;
+        const v = i1 * cx + i3 * cy + i5 - 0.5;
+        if (u < -1 || v < -1 || u > iw || v > ih) continue;
+
+        const uf = Math.floor(u);
+        const vf = Math.floor(v);
+        const fu = u - uf;
+        const fv = v - vf;
+        let r = 0, g = 0, b = 0, a = 0;
+        for (let dy = 0; dy <= 1; dy++) {
+          const sy = vf + dy;
+          if (sy < 0 || sy >= ih) continue;
+          const wy = dy ? fv : 1 - fv;
+          for (let dx = 0; dx <= 1; dx++) {
+            const sx = uf + dx;
+            if (sx < 0 || sx >= iw) continue;
+            const wt = wy * (dx ? fu : 1 - fu);
+            if (!wt) continue;
+            const si = (sy * iw + sx) * 4;
+            const sa = (data[si + 3] / 255) * wt;
+            r += data[si] * sa;
+            g += data[si + 1] * sa;
+            b += data[si + 2] * sa;
+            a += sa;
+          }
+        }
+        let sa = a * alpha;
+        if (clip) sa *= clip[clipOff + px];
+        if (sa <= 0) continue;
+        if (sa > 1) sa = 1;
+        const scale = a > 0 ? sa / a : 0;
+
+        const idx = (py * w + px) * 4;
+        if (blendFn) {
+          const ab = buf[idx + 3] / 255;
+          const br = ab > 0 ? buf[idx] / 255 / ab : 0;
+          const bg = ab > 0 ? buf[idx + 1] / 255 / ab : 0;
+          const bb = ab > 0 ? buf[idx + 2] / 255 / ab : 0;
+          const sr = a > 0 ? r / a / 255 : 0;
+          const sg = a > 0 ? g / a / 255 : 0;
+          const sb = a > 0 ? b / a / 255 : 0;
+          buf[idx] = (sa * (1 - ab) * sr + sa * ab * blendFn(br, sr) + (1 - sa) * ab * br) * 255;
+          buf[idx + 1] = (sa * (1 - ab) * sg + sa * ab * blendFn(bg, sg) + (1 - sa) * ab * bg) * 255;
+          buf[idx + 2] = (sa * (1 - ab) * sb + sa * ab * blendFn(bb, sb) + (1 - sa) * ab * bb) * 255;
+          buf[idx + 3] = (sa + ab * (1 - sa)) * 255;
+        } else {
+          const ia = 1 - sa;
+          buf[idx] = buf[idx] * ia + r * scale;
+          buf[idx + 1] = buf[idx + 1] * ia + g * scale;
+          buf[idx + 2] = buf[idx + 2] * ia + b * scale;
+          buf[idx + 3] = buf[idx + 3] * ia + 255 * sa;
+        }
+      }
     }
   }
 

@@ -17,6 +17,7 @@ export class ImageSurface implements Surface<RGBAImage> {
     return rasterize(anim.sceneAt(frame), {
       width: options.width ?? this.width,
       height: options.height ?? this.height,
+      images: options.images,
     });
   }
 
