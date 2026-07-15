@@ -131,8 +131,9 @@ const { data, width, height } = image.render(anim, frame); // RGBA
 const png = await image.png(anim, frame);                  // PNG bytes
 ```
 
-`render` options are `width`, `height`, `dpr`, and (for SVG) `idPrefix`.
-Dimensions default to the composition size.
+`render` options are `width`, `height`, `dpr`, (for SVG) `idPrefix`, and (for
+`ImageSurface`) `images` with decoded pixels for image assets. Dimensions
+default to the composition size.
 
 ## Playback
 
@@ -228,10 +229,13 @@ backend), read the scene and issue your own draw calls.
 ```js
 const anim = parse(data);
 for (const op of anim.sceneAt(frame).ops) {
+  // op.kind   : 'shape' | 'image'
   // op.matrix : [a, b, c, d, tx, ty]
   // op.paths  : cubic-bezier contours
   // op.fills  : solid colors and gradients
-  // op.strokes: color, width, cap, join
+  // op.strokes: color or gradient, width, cap, join, dashes
+  // op.clips  : optional mask/matte stages (intersect or subtract)
+  // op.blend  : optional Lottie blend mode
 }
 ```
 
@@ -278,14 +282,23 @@ Convenience for the browser. Wires a `CanvasSurface` and a `Playback`.
 
 ## Supported features
 
-Supported across every surface: shape layers (paths, ellipses, rectangles),
-groups, fills, strokes with caps and joins, linear and radial gradients, the
-full transform stack with layer parenting, precompositions, time remapping,
-solid layers, and keyframe interpolation with bezier easing, hold keyframes,
-and spatial keyframes.
+Supported across every surface: shape layers (paths, ellipses, rectangles,
+polystars), groups, fills, strokes with caps, joins, miter limits, and dashes,
+gradient fills and gradient strokes (linear and radial with highlight), trim
+paths, rounded corners, repeaters, zig zag, pucker & bloat, twist, offset
+paths, merge paths (merge, and approximations of subtract and exclude), masks
+(add, subtract, intersect, inverted), track mattes (alpha and inverted; luma
+approximated by shape), blend modes, image layers, the full transform stack
+with layer parenting and auto-orient, precompositions with bounds clipping,
+time remapping, solid layers, and keyframe interpolation with bezier easing,
+per-dimension easing, hold keyframes, and spatial keyframes.
 
-Not yet: trim paths, merge paths, repeaters, polystars, masks, track mattes,
-blend modes, layer effects, text, images, and expressions.
+Image layers resolve to data URIs or URLs. `CanvasSurface` and `SvgSurface`
+load them natively; for `ImageSurface`, pass decoded pixels via
+`render(anim, frame, { images: { [assetId]: { data, width, height } } })`.
+
+Not yet: layer effects, text, expressions, 3D layers, and true boolean merge
+paths.
 
 ## License
 
