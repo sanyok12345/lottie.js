@@ -313,18 +313,17 @@ function layer(
   if (layer.hd || layer.ty === TY_NULL) return;
   if (frame < (layer.ip ?? 0) || frame >= (layer.op ?? Infinity)) return;
 
-  const local = localFrame(layer, frame);
-  const opacity = transformOpacity(layer.ks, local);
+  const opacity = transformOpacity(layer.ks, frame);
   if (opacity <= 0) return;
 
   const staticMx = chainStatic(layer, byInd);
-  let m = layerMatrix(layer, local);
+  let m = layerMatrix(layer, frame);
   let node = layer;
   let guard = 0;
   while (node.parent !== undefined && guard++ < 100) {
     const parent = byInd.get(node.parent);
     if (!parent) break;
-    m = multiply(layerMatrix(parent, localFrame(parent, frame)), m);
+    m = multiply(layerMatrix(parent, frame), m);
     node = parent;
   }
 
@@ -332,14 +331,14 @@ function layer(
 
   switch (layer.ty) {
     case TY_SHAPE:
-      shapeItems(layer.shapes ?? [], local, m, opacity, staticMx, ctx, []);
+      shapeItems(layer.shapes ?? [], frame, m, opacity, staticMx, ctx, []);
       break;
     case TY_PRECOMP: {
       if (ctx.depth > 20) return;
       const asset = ctx.assets.get(layer.refId as string);
       if (!asset || !Array.isArray(asset.layers)) return;
-      let childFrame = local;
-      if (layer.tm) childFrame = (scalar(evaluate(layer.tm, local)) ?? 0) * ctx.frameRate;
+      let childFrame = localFrame(layer, frame);
+      if (layer.tm) childFrame = (scalar(evaluate(layer.tm, frame)) ?? 0) * ctx.frameRate;
       ctx.depth++;
       layers(asset.layers, childFrame, ctx);
       ctx.depth--;
@@ -408,7 +407,7 @@ function layer(
   }
 
   const stages: Clip[] = extraClips ? [...extraClips] : [];
-  stages.push(...maskClips(layer, m, local));
+  stages.push(...maskClips(layer, m, frame));
   const blend = typeof layer.bm === 'number' && layer.bm ? layer.bm : undefined;
   if (stages.length || blend !== undefined) {
     for (let i = start; i < ctx.ops.length; i++) {
