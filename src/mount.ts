@@ -24,10 +24,28 @@ export async function mount(opts: MountOptions): Promise<Playback> {
   const ctx = opts.canvas.getContext('2d');
   if (!ctx) throw new Error('mount: canvas has no 2d context');
   const surface = new CanvasSurface(ctx);
+  let render = opts.render;
+  const dpr = render?.dpr ?? (globalThis as { devicePixelRatio?: number }).devicePixelRatio ?? 1;
+  const canvas = opts.canvas as {
+    width?: number;
+    height?: number;
+    style?: { width: string; height: string };
+  };
+  if (dpr !== 1 && render?.width === undefined && typeof canvas.width === 'number' && typeof canvas.height === 'number') {
+    const cssW = canvas.width;
+    const cssH = canvas.height;
+    canvas.width = Math.round(cssW * dpr);
+    canvas.height = Math.round(cssH * dpr);
+    if (canvas.style) {
+      if (!canvas.style.width) canvas.style.width = `${cssW}px`;
+      if (!canvas.style.height) canvas.style.height = `${cssH}px`;
+    }
+    render = { ...render, width: canvas.width, height: canvas.height };
+  }
   return new Playback({
     animation,
     surface,
-    render: opts.render,
+    render,
     loop: opts.loop,
     speed: opts.speed,
     mode: opts.mode,
