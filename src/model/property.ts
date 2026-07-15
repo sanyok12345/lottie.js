@@ -40,8 +40,17 @@ function evaluateKeyframes(kfs: Keyframe[], frame: number): AnimValue | undefine
   if (v0 === undefined || v1 === undefined) return v0 ?? v1;
 
   const lin = (frame - k0.t) / (k1.t - k0.t);
-  const t = easingFor(k0)(lin);
-  return interpolate(v0, v1, t, k0);
+  const ease = easingFor(k0);
+  if (Array.isArray(ease)) {
+    if (Array.isArray(v0) && Array.isArray(v1) && !(Array.isArray(k0.to) && Array.isArray(k0.ti))) {
+      return v0.map((a, idx) => {
+        const fn = ease[Math.min(idx, ease.length - 1)];
+        return lerp(a, (v1 as number[])[idx] ?? a, fn(lin));
+      });
+    }
+    return interpolate(v0, v1, ease[0](lin), k0);
+  }
+  return interpolate(v0, v1, ease(lin), k0);
 }
 
 function keyValue(kfs: Keyframe[], i: number): AnimValue | undefined {
@@ -60,22 +69,46 @@ function unwrap(v: unknown): AnimValue {
   return v as AnimValue;
 }
 
-const easingCache = new WeakMap<Keyframe, Easing>();
+const easingCache = new WeakMap<Keyframe, Easing | Easing[]>();
 
-function easingFor(kf: Keyframe): Easing {
+const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
+
+function pickAt(v: number | number[] | undefined, idx: number, fallback: number): number {
+  const n = Array.isArray(v) ? v[Math.min(idx, v.length - 1)] : v;
+  return typeof n === 'number' ? n : fallback;
+}
+
+function easeAt(kf: Keyframe, idx: number): Easing {
+  return cubicBezierEasing(
+    clamp01(pickAt(kf.o?.x, idx, 1 / 3)),
+    pickAt(kf.o?.y, idx, 1 / 3),
+    clamp01(pickAt(kf.i?.x, idx, 2 / 3)),
+    pickAt(kf.i?.y, idx, 2 / 3)
+  );
+}
+
+function easingFor(kf: Keyframe): Easing | Easing[] {
   let fn = easingCache.get(kf);
   if (!fn) {
-    const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
-    const pick = (v: number | number[] | undefined, fallback: number): number => {
-      const n = Array.isArray(v) ? v[0] : v;
-      return typeof n === 'number' ? n : fallback;
-    };
-    fn = cubicBezierEasing(
-      clamp01(pick(kf.o?.x, 1 / 3)),
-      pick(kf.o?.y, 1 / 3),
-      clamp01(pick(kf.i?.x, 2 / 3)),
-      pick(kf.i?.y, 2 / 3)
+    const dims = Math.max(
+      Array.isArray(kf.o?.x) ? kf.o.x.length : 1,
+      Array.isArray(kf.i?.x) ? kf.i.x.length : 1
     );
+    if (dims > 1) {
+      const fns: Easing[] = [];
+      for (let d = 0; d < dims; d++) fns.push(easeAt(kf, d));
+      const same = fns.every(
+        (_, d) =>
+          d === 0 ||
+          (pickAt(kf.o?.x, d, 1 / 3) === pickAt(kf.o?.x, 0, 1 / 3) &&
+            pickAt(kf.o?.y, d, 1 / 3) === pickAt(kf.o?.y, 0, 1 / 3) &&
+            pickAt(kf.i?.x, d, 2 / 3) === pickAt(kf.i?.x, 0, 2 / 3) &&
+            pickAt(kf.i?.y, d, 2 / 3) === pickAt(kf.i?.y, 0, 2 / 3))
+      );
+      fn = same ? fns[0] : fns;
+    } else {
+      fn = easeAt(kf, 0);
+    }
     easingCache.set(kf, fn);
   }
   return fn;
