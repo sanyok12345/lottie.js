@@ -115,6 +115,127 @@ function cachedGeom(item: ShapeItem, build: () => PathData): PathData {
   return g;
 }
 
+const styledCache = new WeakMap<ShapeItem, boolean>();
+
+function hasStyles(group: ShapeItem): boolean {
+  let styled = styledCache.get(group);
+  if (styled === undefined) {
+    styled = false;
+    for (const it of group.it ?? []) {
+      if (!it || it.hd) continue;
+      const t = it.ty;
+      if (t === 'fl' || t === 'st' || t === 'gf' || t === 'gs' || (t === 'gr' && hasStyles(it))) {
+        styled = true;
+        break;
+      }
+    }
+    styledCache.set(group, styled);
+  }
+  return styled;
+}
+
+function geomOf(item: ShapeItem, frame: number): { path: PathData; static: boolean } | null {
+  switch (item.ty) {
+    case 'sh': {
+      let path = evaluate(item.ks, frame) as PathData | undefined;
+      if (!path || !Array.isArray(path.v) || !path.v.length) return null;
+      if (item.d === 3) path = reversePath(path);
+      return { path, static: isStatic(item.ks) };
+    }
+    case 'el': {
+      const st = isStatic(item.p) && isStatic(item.s);
+      const build = () => {
+        const p = ellipsePath(evaluate(item.p, frame), evaluate(item.s, frame));
+        return item.d === 3 ? reversePath(p) : p;
+      };
+      return { path: st ? cachedGeom(item, build) : build(), static: st };
+    }
+    case 'rc': {
+      const st = isStatic(item.p) && isStatic(item.s) && isStatic(item.r);
+      const build = () => {
+        const p = rectPath(
+          evaluate(item.p, frame),
+          evaluate(item.s, frame),
+          scalar(evaluate(item.r, frame)) ?? 0
+        );
+        return item.d === 3 ? reversePath(p) : p;
+      };
+      return { path: st ? cachedGeom(item, build) : build(), static: st };
+    }
+    case 'sr': {
+      const st =
+        isStatic(item.p) &&
+        isStatic(item.pt) &&
+        isStatic(item.r) &&
+        isStatic(item.or) &&
+        isStatic(item.ir) &&
+        isStatic(item.os) &&
+        isStatic(item.is);
+      const build = () => {
+        const p = polystarPath(
+          evaluate(item.p, frame),
+          scalar(evaluate(item.pt, frame)) ?? 5,
+          scalar(evaluate(item.r, frame)) ?? 0,
+          scalar(evaluate(item.or, frame)) ?? 0,
+          scalar(evaluate(item.ir, frame)) ?? 0,
+          scalar(evaluate(item.os, frame)) ?? 0,
+          scalar(evaluate(item.is, frame)) ?? 0,
+          item.sy !== 2
+        );
+        return item.d === 3 ? reversePath(p) : p;
+      };
+      return { path: st ? cachedGeom(item, build) : build(), static: st };
+    }
+    default:
+      return null;
+  }
+}
+
+function transformPath(p: PathData, m: Matrix): PathData {
+  const n = p.v.length;
+  const v: PathData['v'] = new Array(n);
+  const i: PathData['i'] = new Array(n);
+  const o: PathData['o'] = new Array(n);
+  for (let j = 0; j < n; j++) {
+    const pt = p.v[j];
+    const it = p.i?.[j] ?? [0, 0];
+    const ot = p.o?.[j] ?? [0, 0];
+    v[j] = [m[0] * pt[0] + m[2] * pt[1] + m[4], m[1] * pt[0] + m[3] * pt[1] + m[5]];
+    i[j] = [m[0] * it[0] + m[2] * it[1], m[1] * it[0] + m[3] * it[1]];
+    o[j] = [m[0] * ot[0] + m[2] * ot[1], m[1] * ot[0] + m[3] * ot[1]];
+  }
+  return { c: p.c, v, i, o };
+}
+
+function collectPaths(
+  group: ShapeItem,
+  frame: number,
+  m: Matrix | null,
+  out: PathData[]
+): boolean {
+  let allStatic = true;
+  const items = group.it ?? [];
+  const tr = items.find((it) => it && it.ty === 'tr');
+  if (tr) {
+    const trM = cachedTransformMatrix(tr, frame);
+    m = m ? multiply(m, trM) : trM;
+    if (!isStaticTransform(tr)) allStatic = false;
+  }
+  for (const item of items) {
+    if (!item || item.hd) continue;
+    if (item.ty === 'gr') {
+      if (!collectPaths(item, frame, m, out)) allStatic = false;
+      continue;
+    }
+    const g = geomOf(item, frame);
+    if (g) {
+      out.push(m ? transformPath(g.path, m) : g.path);
+      if (!g.static) allStatic = false;
+    }
+  }
+  return allStatic;
+}
+
 function layers(list: Layer[], frame: number, ctx: Ctx): void {
   const byInd = new Map<number, Layer>();
   for (const l of list) if (l.ind !== undefined) byInd.set(l.ind, l);
@@ -465,65 +586,18 @@ function shapeItems(
     if (!item || item.hd) continue;
     switch (item.ty) {
       case 'gr':
-        subgroups.push(item);
+        if (hasStyles(item)) subgroups.push(item);
+        else if (!collectPaths(item, frame, null, paths)) geomStatic = false;
         break;
-      case 'sh': {
-        let path = evaluate(item.ks, frame) as PathData | undefined;
-        if (path && Array.isArray(path.v) && path.v.length) {
-          if (item.d === 3) path = reversePath(path);
-          paths.push(path);
-        }
-        if (!isStatic(item.ks)) geomStatic = false;
-        break;
-      }
-      case 'el': {
-        const st = isStatic(item.p) && isStatic(item.s);
-        const build = () => {
-          const p = ellipsePath(evaluate(item.p, frame), evaluate(item.s, frame));
-          return item.d === 3 ? reversePath(p) : p;
-        };
-        paths.push(st ? cachedGeom(item, build) : build());
-        if (!st) geomStatic = false;
-        break;
-      }
-      case 'rc': {
-        const st = isStatic(item.p) && isStatic(item.s) && isStatic(item.r);
-        const build = () => {
-          const p = rectPath(
-            evaluate(item.p, frame),
-            evaluate(item.s, frame),
-            scalar(evaluate(item.r, frame)) ?? 0
-          );
-          return item.d === 3 ? reversePath(p) : p;
-        };
-        paths.push(st ? cachedGeom(item, build) : build());
-        if (!st) geomStatic = false;
-        break;
-      }
+      case 'sh':
+      case 'el':
+      case 'rc':
       case 'sr': {
-        const st =
-          isStatic(item.p) &&
-          isStatic(item.pt) &&
-          isStatic(item.r) &&
-          isStatic(item.or) &&
-          isStatic(item.ir) &&
-          isStatic(item.os) &&
-          isStatic(item.is);
-        const build = () => {
-          const p = polystarPath(
-            evaluate(item.p, frame),
-            scalar(evaluate(item.pt, frame)) ?? 5,
-            scalar(evaluate(item.r, frame)) ?? 0,
-            scalar(evaluate(item.or, frame)) ?? 0,
-            scalar(evaluate(item.ir, frame)) ?? 0,
-            scalar(evaluate(item.os, frame)) ?? 0,
-            scalar(evaluate(item.is, frame)) ?? 0,
-            item.sy !== 2
-          );
-          return item.d === 3 ? reversePath(p) : p;
-        };
-        paths.push(st ? cachedGeom(item, build) : build());
-        if (!st) geomStatic = false;
+        const g = geomOf(item, frame);
+        if (g) {
+          paths.push(g.path);
+          if (!g.static) geomStatic = false;
+        }
         break;
       }
       case 'fl':
