@@ -1,6 +1,6 @@
 {
   "name": "lottie.js",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "A fast, dependency-free Lottie engine for every JavaScript runtime and environment",
   "type": "module",
   "main": "./dist/lottie.cjs",
