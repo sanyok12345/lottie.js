@@ -29,6 +29,7 @@ import {
   textEnv,
   type TextEnv,
 } from './text.js';
+import { mergePathsBoolean } from './boolean.js';
 import type { Asset, Layer, LottieData, ShapeItem, Transform } from '../model/types.js';
 import type {
   Clip,
@@ -890,11 +891,19 @@ function shapeItems(
     if (mod) outPaths = mod(outPaths, frame);
   }
   let mergeClips: Clip[] | undefined;
-  if ((mergeMode === 3 || mergeMode === 4) && outPaths.length > 1) {
-    mergeClips = [
-      { shapes: [{ paths: outPaths.slice(1), matrix }], mode: mergeMode === 3 ? 2 : 1 },
-    ];
-    outPaths = [outPaths[0]];
+  if ((mergeMode === 2 || mergeMode === 3 || mergeMode === 4) && outPaths.length > 1) {
+    const solved = strokes.length
+      ? mergePathsBoolean(outPaths, mergeMode as 2 | 3 | 4)
+      : null;
+    if (solved) {
+      outPaths = solved;
+      geomStatic = false;
+    } else if (mergeMode === 3 || mergeMode === 4) {
+      mergeClips = [
+        { shapes: [{ paths: outPaths.slice(1), matrix }], mode: mergeMode === 3 ? 2 : 1 },
+      ];
+      outPaths = [outPaths[0]];
+    }
   }
 
   for (let i = subgroups.length - 1; i >= 0; i--) {
