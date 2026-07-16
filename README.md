@@ -286,19 +286,27 @@ Supported across every surface: shape layers (paths, ellipses, rectangles,
 polystars), groups, fills, strokes with caps, joins, miter limits, and dashes,
 gradient fills and gradient strokes (linear and radial with highlight), trim
 paths, rounded corners, repeaters, zig zag, pucker & bloat, twist, offset
-paths, merge paths (merge, and approximations of subtract and exclude), masks
-(add, subtract, intersect, inverted), track mattes (alpha and inverted; luma
-approximated by shape), blend modes, image layers, the full transform stack
-with layer parenting and auto-orient, precompositions with bounds clipping,
-time remapping, solid layers, and keyframe interpolation with bezier easing,
-per-dimension easing, hold keyframes, and spatial keyframes.
+paths with real joins, merge paths (merge and exclude; subtract and intersect
+compile to clip stages), masks with all seven modes plus opacity and
+expansion, track mattes (alpha and luminance, both invertible), all blend
+modes, motion blur, text layers from embedded glyphs (layout, justification,
+tracking, boxed text, document keyframes), image layers, slots, the full
+transform stack with layer parenting and auto-orient, precompositions with
+bounds clipping and collapse transform, time remapping, solid layers, and
+keyframe interpolation with bezier easing, per-dimension easing, hold
+keyframes, and spatial keyframes.
 
 Image layers resolve to data URIs or URLs. `CanvasSurface` and `SvgSurface`
 load them natively; for `ImageSurface`, pass decoded pixels via
 `render(anim, frame, { images: { [assetId]: { data, width, height } } })`.
 
-Not yet: layer effects, text, expressions, 3D layers, and true boolean merge
-paths.
+Expressions are supported through a pluggable evaluator: the core ships the
+`setExpressionEvaluator(fn)` hook and stays eval-free, an interpreter package
+provides the engine. Without an evaluator, expressions fall back to keyframed
+values.
+
+Not yet: layer effects, font-file text and text animators, 3D layers, and
+true boolean merge path outlines.
 
 ## License
 
