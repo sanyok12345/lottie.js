@@ -286,11 +286,12 @@ Supported across every surface: shape layers (paths, ellipses, rectangles,
 polystars), groups, fills, strokes with caps, joins, miter limits, and dashes,
 gradient fills and gradient strokes (linear and radial with highlight), trim
 paths, rounded corners, repeaters, zig zag, pucker & bloat, twist, offset
-paths with real joins, merge paths (merge and exclude; subtract and intersect
-compile to clip stages), masks with all seven modes plus opacity and
-expansion, track mattes (alpha and luminance, both invertible), all blend
+paths with real joins, merge paths (fills compile to clip stages, stroked
+shapes get true boolean outlines), masks with all seven modes plus opacity
+and expansion, track mattes (alpha and luminance, both invertible), all blend
 modes, motion blur, text layers from embedded glyphs (layout, justification,
-tracking, boxed text, document keyframes), image layers, slots, the full
+tracking, boxed text, document keyframes, text animators with range
+selectors, text on a path), image layers, slots, the full
 transform stack with layer parenting and auto-orient, precompositions with
 bounds clipping and collapse transform, time remapping, solid layers, and
 keyframe interpolation with bezier easing, per-dimension easing, hold
@@ -305,8 +306,8 @@ Expressions are supported through a pluggable evaluator: the core ships the
 provides the engine. Without an evaluator, expressions fall back to keyframed
 values.
 
-Not yet: layer effects, font-file text and text animators, 3D layers, and
-true boolean merge path outlines.
+Not yet: layer effects, font-file text without embedded glyphs, and 3D
+layers.
 
 ## License
 
