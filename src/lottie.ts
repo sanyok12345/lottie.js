@@ -1,5 +1,7 @@
 export { parse } from './parse.js';
 export { load } from './load.js';
+export { setExpressionEvaluator } from './model/property.js';
+export type { ExpressionEvaluator, ExpressionContext } from './model/property.js';
 export { Animation } from './animation.js';
 export { Playback } from './playback.js';
 export { mount } from './mount.js';

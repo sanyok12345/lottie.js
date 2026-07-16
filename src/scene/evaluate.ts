@@ -1,4 +1,10 @@
-import { evaluate, isStatic, scalar, setSlots } from '../model/property.js';
+import {
+  evaluate,
+  isStatic,
+  scalar,
+  setExpressionFrameRate,
+  setSlots,
+} from '../model/property.js';
 import { invert, multiply, rotation, scaling, translation, type Matrix } from '../math/matrix.js';
 import { hexToRgb, to255 } from '../math/color.js';
 import { safeHexColor } from '../util.js';
@@ -47,6 +53,7 @@ const textPathsCache = new WeakMap<object, PathData[]>();
 
 export function sceneAt(data: LottieData, frame: number): Scene {
   setSlots(data.slots);
+  setExpressionFrameRate(data.fr ?? 30);
   let env = textEnvCache.get(data);
   if (env === undefined) {
     env = textEnv(data);

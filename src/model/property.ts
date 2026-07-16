@@ -18,12 +18,58 @@ function resolved(prop: Animatable): Animatable {
   return prop;
 }
 
-export function evaluate(prop: Animatable | undefined, frame: number): any {
-  if (prop == null) return undefined;
-  prop = resolved(prop);
+export interface ExpressionContext {
+  value: any;
+  frame: number;
+  time: number;
+  frameRate: number;
+  evalAt: (frame: number) => any;
+  keyStart?: number;
+  keyEnd?: number;
+}
+
+export type ExpressionEvaluator = (expr: string, ctx: ExpressionContext) => any;
+
+let exprEval: ExpressionEvaluator | null = null;
+let exprFrameRate = 30;
+
+export function setExpressionEvaluator(fn: ExpressionEvaluator | null): void {
+  exprEval = fn;
+}
+
+export function setExpressionFrameRate(fr: number): void {
+  exprFrameRate = fr || 30;
+}
+
+function rawEvaluate(prop: Animatable, frame: number): any {
   if (prop.k === undefined) return undefined;
   if (!animated(prop)) return prop.k as AnimValue;
   return evaluateKeyframes(prop.k as Keyframe[], frame);
+}
+
+export function evaluate(prop: Animatable | undefined, frame: number): any {
+  if (prop == null) return undefined;
+  if (prop.sid !== undefined) prop = resolved(prop);
+  const base = rawEvaluate(prop, frame);
+  if (exprEval && typeof prop.x === 'string') {
+    const target = prop;
+    const kfs = animated(target) ? (target.k as Keyframe[]) : null;
+    try {
+      const out = exprEval(target.x as unknown as string, {
+        value: base,
+        frame,
+        time: frame / exprFrameRate,
+        frameRate: exprFrameRate,
+        evalAt: (f: number) => rawEvaluate(target, f),
+        keyStart: kfs ? kfs[0].t : undefined,
+        keyEnd: kfs ? kfs[kfs.length - 1].t : undefined,
+      });
+      if (out !== undefined) return out;
+    } catch {
+      return base;
+    }
+  }
+  return base;
 }
 
 export const scalar = (v: AnimValue | undefined): number | undefined =>
@@ -31,7 +77,8 @@ export const scalar = (v: AnimValue | undefined): number | undefined =>
 
 export function isStatic(prop: Animatable | undefined): boolean {
   if (prop == null) return true;
-  prop = resolved(prop);
+  if (prop.sid !== undefined) prop = resolved(prop);
+  if (exprEval && typeof prop.x === 'string') return false;
   return prop.k === undefined || !animated(prop);
 }
 
