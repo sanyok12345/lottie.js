@@ -364,7 +364,7 @@ function layer(
       const w = layer.w ?? asset.w ?? 0;
       const h = layer.h ?? asset.h ?? 0;
       const clipStage: Clip | null =
-        w && h
+        w && h && layer.ct !== 1
           ? { shapes: [{ paths: [rectPath([w / 2, h / 2], [w, h], 0)], matrix: m }], mode: 1 }
           : null;
       for (let i = start; i < ctx.ops.length; i++) {
