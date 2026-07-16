@@ -359,14 +359,50 @@ function maskClips(layer: Layer, m: Matrix, frame: number): Clip[] {
   return clips;
 }
 
+const MB_SAMPLES = 6;
+const MB_SHUTTER = 0.5;
+
+function scaleOpAlpha(op: DrawOp, mul: number): void {
+  if (op.kind === 'shape') {
+    op.fills = op.fills.map((f) => ({ ...f, alpha: f.alpha * mul }));
+    op.strokes = op.strokes.map((s) => ({ ...s, alpha: s.alpha * mul }));
+  } else {
+    op.alpha *= mul;
+  }
+  op.static = false;
+}
+
 function layer(
+  layer: Layer,
+  byInd: Map<number, Layer>,
+  frame: number,
+  ctx: Ctx,
+  extraClips?: Clip[],
+  mbSample = false
+): void {
+  if (layer.hd || layer.ty === TY_NULL) return;
+  if (!mbSample && layer.mb && !chainStatic(layer, byInd)) {
+    for (let k = 0; k < MB_SAMPLES; k++) {
+      const t = frame + ((k + 0.5) / MB_SAMPLES - 0.5) * MB_SHUTTER;
+      const before = ctx.ops.length;
+      layer_(layer, byInd, t, ctx, extraClips);
+      const mul = 1 / (k + 1);
+      if (mul < 1) {
+        for (let i = before; i < ctx.ops.length; i++) scaleOpAlpha(ctx.ops[i], mul);
+      }
+    }
+    return;
+  }
+  layer_(layer, byInd, frame, ctx, extraClips);
+}
+
+function layer_(
   layer: Layer,
   byInd: Map<number, Layer>,
   frame: number,
   ctx: Ctx,
   extraClips?: Clip[]
 ): void {
-  if (layer.hd || layer.ty === TY_NULL) return;
   if (frame < (layer.ip ?? 0) || frame >= (layer.op ?? Infinity)) return;
 
   const opacity = transformOpacity(layer.ks, frame);
