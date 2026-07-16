@@ -5,6 +5,7 @@ import { safeHexColor } from '../util.js';
 import { positionAt, transformMatrix, transformOpacity } from './transform.js';
 import { ellipsePath, polystarPath, rectPath, reversePath } from './shape.js';
 import { offsetPath, puckerBloat, roundCorners, trimPaths, twist, zigZag } from './modifiers.js';
+import { isStaticDoc, layoutText, textDocAt, textEnv, type TextEnv } from './text.js';
 import type { Asset, Layer, LottieData, ShapeItem, Transform } from '../model/types.js';
 import type {
   Clip,
@@ -23,20 +24,31 @@ const TY_SOLID = 1;
 const TY_IMAGE = 2;
 const TY_NULL = 3;
 const TY_SHAPE = 4;
+const TY_TEXT = 5;
 
 interface Ctx {
   assets: Map<string, Asset>;
   frameRate: number;
   ops: DrawOp[];
   depth: number;
+  text: TextEnv | null;
 }
 
+const textEnvCache = new WeakMap<LottieData, TextEnv | null>();
+const textPathsCache = new WeakMap<object, PathData[]>();
+
 export function sceneAt(data: LottieData, frame: number): Scene {
+  let env = textEnvCache.get(data);
+  if (env === undefined) {
+    env = textEnv(data);
+    textEnvCache.set(data, env);
+  }
   const ctx: Ctx = {
     assets: new Map((data.assets ?? []).map((a) => [a.id, a])),
     frameRate: data.fr ?? 30,
     ops: [],
     depth: 0,
+    text: env,
   };
   layers(data.layers ?? [], frame, ctx);
   return { width: data.w, height: data.h, ops: ctx.ops };
@@ -258,7 +270,13 @@ function matteClips(
   ctx: Ctx,
   tt: number
 ): Clip[] {
-  const sub: Ctx = { assets: ctx.assets, frameRate: ctx.frameRate, ops: [], depth: ctx.depth };
+  const sub: Ctx = {
+    assets: ctx.assets,
+    frameRate: ctx.frameRate,
+    ops: [],
+    depth: ctx.depth,
+    text: ctx.text,
+  };
   layer(src, byInd, frame, sub);
   const shapes: ClipShape[] = [];
   for (const op of sub.ops) {
@@ -379,6 +397,55 @@ function layer(
         fills: [{ kind: 'color', color: hexToRgb(safeHexColor(layer.sc)), alpha: opacity, rule: 1 }],
         strokes: [],
         static: staticMx,
+      });
+      break;
+    }
+    case TY_TEXT: {
+      if (!ctx.text) return;
+      const doc = textDocAt(layer, frame);
+      if (!doc) return;
+      let paths = textPathsCache.get(doc);
+      if (!paths) {
+        paths = [];
+        for (const g of layoutText(doc, ctx.text)) {
+          const gm = multiply(translation(g.x, g.y), scaling(g.scale, g.scale));
+          for (const item of g.glyph.shapes) {
+            if (!item || item.hd) continue;
+            if (item.ty === 'gr') collectPaths(item, frame, gm, paths);
+            else {
+              const geo = geomOf(item, frame);
+              if (geo) paths.push(transformPath(geo.path, gm));
+            }
+          }
+        }
+        textPathsCache.set(doc, paths);
+      }
+      if (!paths.length) return;
+      const fills: FillPaint[] = [];
+      const strokes: StrokePaint[] = [];
+      if (Array.isArray(doc.fc)) {
+        fills.push({ kind: 'color', color: to255(doc.fc), alpha: opacity, rule: 1 });
+      }
+      if (Array.isArray(doc.sc) && (doc.sw ?? 0) > 0) {
+        strokes.push({
+          kind: 'color',
+          color: to255(doc.sc),
+          alpha: opacity,
+          width: doc.sw ?? 1,
+          cap: 2,
+          join: 2,
+        });
+      }
+      if (!fills.length && !strokes.length) {
+        fills.push({ kind: 'color', color: [0, 0, 0], alpha: opacity, rule: 1 });
+      }
+      ctx.ops.push({
+        kind: 'shape',
+        paths,
+        matrix: m,
+        fills,
+        strokes,
+        static: staticMx && isStaticDoc(layer),
       });
       break;
     }
