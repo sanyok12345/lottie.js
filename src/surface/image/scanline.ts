@@ -32,6 +32,66 @@ const BLENDS: Record<number, BlendFn> = {
   16: (b, s) => Math.min(1, b + s),
 };
 
+type Blend3Fn = (
+  br: number, bg: number, bb: number,
+  sr: number, sg: number, sb: number
+) => [number, number, number];
+
+const lum3 = (r: number, g: number, b: number): number => 0.3 * r + 0.59 * g + 0.11 * b;
+
+function clipColor(r: number, g: number, b: number): [number, number, number] {
+  const l = lum3(r, g, b);
+  const n = Math.min(r, g, b);
+  const x = Math.max(r, g, b);
+  if (n < 0) {
+    r = l + ((r - l) * l) / (l - n);
+    g = l + ((g - l) * l) / (l - n);
+    b = l + ((b - l) * l) / (l - n);
+  }
+  if (x > 1) {
+    r = l + ((r - l) * (1 - l)) / (x - l);
+    g = l + ((g - l) * (1 - l)) / (x - l);
+    b = l + ((b - l) * (1 - l)) / (x - l);
+  }
+  return [r, g, b];
+}
+
+function setLum(r: number, g: number, b: number, l: number): [number, number, number] {
+  const d = l - lum3(r, g, b);
+  return clipColor(r + d, g + d, b + d);
+}
+
+function setSat(r: number, g: number, b: number, s: number): [number, number, number] {
+  const c = [r, g, b];
+  const idx = [0, 1, 2].sort((a, z) => c[a] - c[z]);
+  const [lo, mid, hi] = idx;
+  if (c[hi] > c[lo]) {
+    c[mid] = ((c[mid] - c[lo]) * s) / (c[hi] - c[lo]);
+    c[hi] = s;
+  } else {
+    c[mid] = 0;
+    c[hi] = 0;
+  }
+  c[lo] = 0;
+  return [c[0], c[1], c[2]];
+}
+
+const sat3 = (r: number, g: number, b: number): number =>
+  Math.max(r, g, b) - Math.min(r, g, b);
+
+const BLENDS3: Record<number, Blend3Fn> = {
+  12: (br, bg, bb, sr, sg, sb) => {
+    const [r, g, b] = setSat(sr, sg, sb, sat3(br, bg, bb));
+    return setLum(r, g, b, lum3(br, bg, bb));
+  },
+  13: (br, bg, bb, sr, sg, sb) => {
+    const [r, g, b] = setSat(br, bg, bb, sat3(sr, sg, sb));
+    return setLum(r, g, b, lum3(br, bg, bb));
+  },
+  14: (br, bg, bb, sr, sg, sb) => setLum(sr, sg, sb, lum3(br, bg, bb)),
+  15: (br, bg, bb, sr, sg, sb) => setLum(br, bg, bb, lum3(sr, sg, sb)),
+};
+
 export class Raster {
   w: number;
   h: number;
@@ -105,11 +165,12 @@ export class Raster {
     blend = 0
   ): void {
     const blendFn = blend ? BLENDS[blend] : undefined;
-    this.scan(rings, rule, paint, clip, blendFn, null);
+    const blend3 = blend ? BLENDS3[blend] : undefined;
+    this.scan(rings, rule, paint, clip, blendFn, blend3, null);
   }
 
   coverageRings(rings: Ring[], out: Float32Array): void {
-    this.scan(rings, 1, null, null, undefined, out);
+    this.scan(rings, 1, null, null, undefined, undefined, out);
   }
 
   private coverageRow(py: number, x0: number, x1: number, out: Float32Array): void {
@@ -130,6 +191,7 @@ export class Raster {
     paint: DevicePaint,
     clip: Float32Array | null,
     blendFn: BlendFn | undefined,
+    blend3: Blend3Fn | undefined,
     covOut: Float32Array | null
   ): void {
     const { w, h } = this;
@@ -255,7 +317,7 @@ export class Raster {
 
       if (rowMax >= rowMin) {
         if (covOut) this.coverageRow(py, rowMin, rowMax, covOut);
-        else if (blendFn) this.blendRowMixed(py, rowMin, rowMax, paint, clip, blendFn);
+        else if (blendFn || blend3) this.blendRowMixed(py, rowMin, rowMax, paint, clip, blendFn, blend3);
         else this.blendRow(py, rowMin, rowMax, paint, clip);
       }
     }
@@ -368,7 +430,8 @@ export class Raster {
     x1: number,
     paint: DevicePaint,
     clip: Float32Array | null,
-    blendFn: BlendFn
+    blendFn: BlendFn | undefined,
+    blend3: Blend3Fn | undefined
   ): void {
     const { buf, cov, w } = this;
     const rowOff = py * w * 4;
@@ -409,9 +472,19 @@ export class Raster {
       const bg = ab > 0 ? buf[idx + 1] / 255 / ab : 0;
       const bb = ab > 0 ? buf[idx + 2] / 255 / ab : 0;
 
-      const rr = as * (1 - ab) * sr + as * ab * blendFn(br, sr) + (1 - as) * ab * br;
-      const rg = as * (1 - ab) * sg + as * ab * blendFn(bg, sg) + (1 - as) * ab * bg;
-      const rb = as * (1 - ab) * sb + as * ab * blendFn(bb, sb) + (1 - as) * ab * bb;
+      let mr: number;
+      let mg: number;
+      let mb: number;
+      if (blend3) {
+        [mr, mg, mb] = blend3(br, bg, bb, sr, sg, sb);
+      } else {
+        mr = blendFn!(br, sr);
+        mg = blendFn!(bg, sg);
+        mb = blendFn!(bb, sb);
+      }
+      const rr = as * (1 - ab) * sr + as * ab * mr + (1 - as) * ab * br;
+      const rg = as * (1 - ab) * sg + as * ab * mg + (1 - as) * ab * bg;
+      const rb = as * (1 - ab) * sb + as * ab * mb + (1 - as) * ab * bb;
       const ra = as + ab * (1 - as);
 
       buf[idx] = rr * 255;
@@ -460,6 +533,7 @@ export class Raster {
     const iw = img.width;
     const ih = img.height;
     const blendFn = blend ? BLENDS[blend] : undefined;
+    const blend3 = blend ? BLENDS3[blend] : undefined;
 
     for (let py = y0; py <= y1; py++) {
       const clipOff = py * w;
@@ -499,7 +573,7 @@ export class Raster {
         const scale = a > 0 ? sa / a : 0;
 
         const idx = (py * w + px) * 4;
-        if (blendFn) {
+        if (blendFn || blend3) {
           const ab = buf[idx + 3] / 255;
           const br = ab > 0 ? buf[idx] / 255 / ab : 0;
           const bg = ab > 0 ? buf[idx + 1] / 255 / ab : 0;
@@ -507,9 +581,19 @@ export class Raster {
           const sr = a > 0 ? r / a / 255 : 0;
           const sg = a > 0 ? g / a / 255 : 0;
           const sb = a > 0 ? b / a / 255 : 0;
-          buf[idx] = (sa * (1 - ab) * sr + sa * ab * blendFn(br, sr) + (1 - sa) * ab * br) * 255;
-          buf[idx + 1] = (sa * (1 - ab) * sg + sa * ab * blendFn(bg, sg) + (1 - sa) * ab * bg) * 255;
-          buf[idx + 2] = (sa * (1 - ab) * sb + sa * ab * blendFn(bb, sb) + (1 - sa) * ab * bb) * 255;
+          let mr: number;
+          let mg: number;
+          let mb: number;
+          if (blend3) {
+            [mr, mg, mb] = blend3(br, bg, bb, sr, sg, sb);
+          } else {
+            mr = blendFn!(br, sr);
+            mg = blendFn!(bg, sg);
+            mb = blendFn!(bb, sb);
+          }
+          buf[idx] = (sa * (1 - ab) * sr + sa * ab * mr + (1 - sa) * ab * br) * 255;
+          buf[idx + 1] = (sa * (1 - ab) * sg + sa * ab * mg + (1 - sa) * ab * bg) * 255;
+          buf[idx + 2] = (sa * (1 - ab) * sb + sa * ab * mb + (1 - sa) * ab * bb) * 255;
           buf[idx + 3] = (sa + ab * (1 - sa)) * 255;
         } else {
           const ia = 1 - sa;
