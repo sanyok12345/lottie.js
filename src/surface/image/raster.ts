@@ -97,10 +97,16 @@ function clipCoverage(r: Raster, clips: Clip[], sx: number, sy: number): Float32
     }
     const tmp = r.acquireStageBuf();
     r.coverageRings(rings, tmp);
+    const a = stage.alpha ?? 1;
     if (stage.mode === 1) {
-      for (let i = 0; i < buf.length; i++) buf[i] *= tmp[i];
+      for (let i = 0; i < buf.length; i++) buf[i] *= tmp[i] * a;
+    } else if (stage.mode === 2) {
+      for (let i = 0; i < buf.length; i++) buf[i] *= 1 - tmp[i] * a;
     } else {
-      for (let i = 0; i < buf.length; i++) buf[i] *= 1 - tmp[i];
+      for (let i = 0; i < buf.length; i++) {
+        const c = tmp[i] * a;
+        buf[i] = buf[i] * (1 - c) + (1 - buf[i]) * c;
+      }
     }
   }
   return buf;

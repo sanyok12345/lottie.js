@@ -56,7 +56,8 @@ export interface ClipShape {
 
 export interface Clip {
   shapes: ClipShape[];
-  mode: 1 | 2;
+  mode: 1 | 2 | 3;
+  alpha?: number;
 }
 
 interface BaseOp {

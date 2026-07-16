@@ -92,19 +92,20 @@ function wrapClips(inner: string, clips: Clip[], ctx: Defs): string | null {
   let out = inner;
   for (let i = clips.length - 1; i >= 0; i--) {
     const clip = clips[i];
+    const subtractive = clip.mode === 2 || clip.mode === 3;
     let content = '';
     for (const shape of clip.shapes) {
       const d = shape.paths.map(pathToD).filter(Boolean).join(' ');
       if (!d) continue;
       const tr = isIdentity(shape.matrix) ? '' : ` transform="${toSvg(shape.matrix)}"`;
-      content += `<path d="${d}"${tr}${clip.mode === 2 ? ' clip-rule="evenodd"' : ''}/>`;
+      content += `<path d="${d}"${tr}${subtractive ? ' clip-rule="evenodd"' : ''}/>`;
     }
     if (!content) {
       if (clip.mode === 1) return null;
       continue;
     }
     const id = `${ctx.idPrefix}-clip-${ctx.nextId++}`;
-    if (clip.mode === 2) {
+    if (subtractive) {
       const pad = Math.max(ctx.sceneW, ctx.sceneH) * 4;
       content =
         `<path d="M${fmt(-pad)},${fmt(-pad)}h${fmt(pad * 2 + ctx.sceneW)}v${fmt(pad * 2 + ctx.sceneH)}` +
@@ -114,6 +115,9 @@ function wrapClips(inner: string, clips: Clip[], ctx: Defs): string | null {
       ctx.defs.push(`<clipPath id="${id}">${content}</clipPath>`);
     }
     out = `<g clip-path="url(#${id})">${out}</g>`;
+    if (clip.mode === 1 && clip.alpha !== undefined && clip.alpha < 1) {
+      out = `<g opacity="${fmt(clip.alpha)}">${out}</g>`;
+    }
   }
   return out;
 }

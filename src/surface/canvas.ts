@@ -44,8 +44,14 @@ export class CanvasSurface implements Surface<void> {
     const dev: Dev = { ba, bb, bc, bd, be, bf, sx, sy };
 
     for (const op of scene.ops) {
-      const clipped = op.clips?.length ? applyClips(ctx, op.clips, dev) : 0;
-      if (clipped === -1) continue;
+      let clipped = 0;
+      let clipAlpha = 1;
+      if (op.clips?.length) {
+        const res = applyClips(ctx, op.clips, dev);
+        if (res === null) continue;
+        clipped = res.saved ? 1 : 0;
+        clipAlpha = res.alpha;
+      }
       const m = op.matrix;
       const ma = m[0] * sx, mb = m[1] * sy, mc = m[2] * sx, md = m[3] * sy, me = m[4] * sx, mf = m[5] * sy;
       ctx.setTransform(
@@ -60,18 +66,18 @@ export class CanvasSurface implements Surface<void> {
       if (blend) ctx.globalCompositeOperation = blend;
 
       if (op.kind === 'image') {
-        this.drawImage(op);
+        this.drawImage(op, clipAlpha);
       } else {
         const path = opPath(op);
         for (const fill of op.fills) {
           if (fill.alpha <= 0) continue;
-          ctx.globalAlpha = fill.alpha;
+          ctx.globalAlpha = fill.alpha * clipAlpha;
           ctx.fillStyle = paintStyle(ctx, fill);
           ctx.fill(path, fill.rule === 2 ? 'evenodd' : 'nonzero');
         }
         for (const stroke of op.strokes) {
           if (stroke.alpha <= 0 || !stroke.width) continue;
-          ctx.globalAlpha = stroke.alpha;
+          ctx.globalAlpha = stroke.alpha * clipAlpha;
           ctx.strokeStyle = paintStyle(ctx, stroke) as string | CanvasGradient;
           ctx.lineWidth = stroke.width;
           ctx.lineCap = stroke.cap === 2 ? 'round' : stroke.cap === 3 ? 'square' : 'butt';
@@ -94,7 +100,7 @@ export class CanvasSurface implements Surface<void> {
     ctx.globalAlpha = prevAlpha;
   }
 
-  private drawImage(op: ImageOp): void {
+  private drawImage(op: ImageOp, alphaMul = 1): void {
     if (typeof Image === 'undefined') return;
     let img = this.images.get(op.src);
     if (!img) {
@@ -104,7 +110,7 @@ export class CanvasSurface implements Surface<void> {
       this.images.set(op.src, img);
     }
     if (!img.complete || !img.naturalWidth) return;
-    this.ctx.globalAlpha = Math.min(1, Math.max(0, op.alpha));
+    this.ctx.globalAlpha = Math.min(1, Math.max(0, op.alpha)) * alphaMul;
     this.ctx.drawImage(img, 0, 0, op.width || img.naturalWidth, op.height || img.naturalHeight);
   }
 
@@ -118,16 +124,22 @@ interface Dev {
   sx: number; sy: number;
 }
 
-function applyClips(ctx: CanvasRenderingContext2D, clips: Clip[], dev: Dev): 0 | 1 | -1 {
+function applyClips(
+  ctx: CanvasRenderingContext2D,
+  clips: Clip[],
+  dev: Dev
+): { saved: boolean; alpha: number } | null {
   let saved = false;
+  let alpha = 1;
   for (const clip of clips) {
     if (!clip.shapes.length) {
       if (clip.mode === 1) {
         if (saved) ctx.restore();
-        return -1;
+        return null;
       }
       continue;
     }
+    if (clip.mode === 1 && clip.alpha !== undefined && clip.alpha < 1) alpha *= clip.alpha;
     const p2d = new Path2D();
     let any = false;
     for (const shape of clip.shapes) {
@@ -151,7 +163,7 @@ function applyClips(ctx: CanvasRenderingContext2D, clips: Clip[], dev: Dev): 0 |
     if (!any) {
       if (clip.mode === 1) {
         if (saved) ctx.restore();
-        return -1;
+        return null;
       }
       continue;
     }
@@ -160,7 +172,7 @@ function applyClips(ctx: CanvasRenderingContext2D, clips: Clip[], dev: Dev): 0 |
       saved = true;
     }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    if (clip.mode === 2) {
+    if (clip.mode === 2 || clip.mode === 3) {
       const outer = new Path2D();
       outer.rect(0, 0, ctx.canvas.width, ctx.canvas.height);
       outer.addPath(p2d);
@@ -169,7 +181,7 @@ function applyClips(ctx: CanvasRenderingContext2D, clips: Clip[], dev: Dev): 0 |
       ctx.clip(p2d, 'nonzero');
     }
   }
-  return saved ? 1 : 0;
+  return { saved, alpha };
 }
 
 const path2dCache = new WeakMap<PathData, Path2D>();

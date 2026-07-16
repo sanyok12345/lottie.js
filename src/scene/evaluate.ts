@@ -4,7 +4,15 @@ import { hexToRgb, to255 } from '../math/color.js';
 import { safeHexColor } from '../util.js';
 import { positionAt, transformMatrix, transformOpacity } from './transform.js';
 import { ellipsePath, polystarPath, rectPath, reversePath } from './shape.js';
-import { offsetPath, puckerBloat, roundCorners, trimPaths, twist, zigZag } from './modifiers.js';
+import {
+  offsetPath,
+  puckerBloat,
+  roundCorners,
+  signedArea,
+  trimPaths,
+  twist,
+  zigZag,
+} from './modifiers.js';
 import { isStaticDoc, layoutText, textDocAt, textEnv, type TextEnv } from './text.js';
 import type { Asset, Layer, LottieData, ShapeItem, Transform } from '../model/types.js';
 import type {
@@ -293,29 +301,39 @@ function maskClips(layer: Layer, m: Matrix, frame: number): Clip[] {
   if (!Array.isArray(list) || !list.length) return [];
   const clips: Clip[] = [];
   let add: ClipShape[] = [];
+  let addAlpha = 1;
   const flushAdd = (): void => {
     if (add.length) {
-      clips.push({ shapes: add, mode: 1 });
+      clips.push({ shapes: add, mode: 1, alpha: addAlpha });
       add = [];
+      addAlpha = 1;
     }
   };
   for (const mk of list) {
     if (!mk || mk.mode === 'n') continue;
-    const pd = evaluate(mk.pt, frame) as PathData | undefined;
+    let pd = evaluate(mk.pt, frame) as PathData | undefined;
     if (!pd || !Array.isArray(pd.v) || !pd.v.length) continue;
+    const expand = scalar(evaluate(mk.x, frame)) ?? 0;
+    if (expand) pd = offsetPath(pd, signedArea(pd) >= 0 ? expand : -expand, 4, 2);
+    const alpha = Math.min(1, Math.max(0, (scalar(evaluate(mk.o, frame)) ?? 100) / 100));
     const shape: ClipShape = { paths: [pd], matrix: m };
     const inv = !!mk.inv;
     if (mk.mode === 's') {
       flushAdd();
-      clips.push({ shapes: [shape], mode: inv ? 1 : 2 });
-    } else if (mk.mode === 'i') {
+      clips.push({ shapes: [shape], mode: inv ? 1 : 2, alpha });
+    } else if (mk.mode === 'i' || mk.mode === 'd') {
       flushAdd();
-      clips.push({ shapes: [shape], mode: inv ? 2 : 1 });
+      clips.push({ shapes: [shape], mode: inv ? 2 : 1, alpha });
+    } else if (mk.mode === 'f') {
+      flushAdd();
+      clips.push({ shapes: [shape], mode: 3, alpha });
     } else if (inv) {
       flushAdd();
-      clips.push({ shapes: [shape], mode: 2 });
+      clips.push({ shapes: [shape], mode: 2, alpha });
     } else {
+      if (add.length && alpha !== addAlpha) flushAdd();
       add.push(shape);
+      addAlpha = alpha;
     }
   }
   flushAdd();
