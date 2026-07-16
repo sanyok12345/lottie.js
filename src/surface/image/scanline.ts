@@ -50,6 +50,7 @@ export class Raster {
   active: Int32Array;
   private clipBuf: Float32Array | null = null;
   private stageBuf: Float32Array | null = null;
+  private shapeBuf: Float32Array | null = null;
 
   constructor(w: number, h: number) {
     this.w = w;
@@ -88,6 +89,12 @@ export class Raster {
     if (!this.stageBuf) this.stageBuf = new Float32Array(this.w * this.h);
     this.stageBuf.fill(0);
     return this.stageBuf;
+  }
+
+  acquireShapeBuf(): Float32Array {
+    if (!this.shapeBuf) this.shapeBuf = new Float32Array(this.w * this.h);
+    this.shapeBuf.fill(0);
+    return this.shapeBuf;
   }
 
   fillRings(

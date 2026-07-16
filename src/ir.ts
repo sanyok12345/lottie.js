@@ -52,6 +52,7 @@ export interface ClipShape {
   paths: PathData[];
   matrix: Matrix;
   rule?: number;
+  coverage?: number;
 }
 
 export interface Clip {

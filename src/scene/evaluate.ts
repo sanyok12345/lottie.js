@@ -272,6 +272,19 @@ function layers(list: Layer[], frame: number, ctx: Ctx): void {
   }
 }
 
+function matteCoverage(fills: FillPaint[], luma: boolean): number {
+  const f = fills[0];
+  if (!f) return 0;
+  const alpha = Math.min(1, Math.max(0, f.alpha));
+  if (!luma) return alpha;
+  const lum = (c: number[]): number =>
+    (0.2126 * (c[0] ?? 0) + 0.7152 * (c[1] ?? 0) + 0.0722 * (c[2] ?? 0)) / 255;
+  if (f.kind === 'color') return lum(f.color) * alpha;
+  let sum = 0;
+  for (const s of f.stops) sum += lum([s.r, s.g, s.b]) * s.a;
+  return (f.stops.length ? sum / f.stops.length : 0) * alpha;
+}
+
 function matteClips(
   src: Layer,
   byInd: Map<number, Layer>,
@@ -287,9 +300,15 @@ function matteClips(
     text: ctx.text,
   };
   layer(src, byInd, frame, sub);
+  const luma = tt === 3 || tt === 4;
   const shapes: ClipShape[] = [];
   for (const op of sub.ops) {
-    if (op.kind === 'shape' && op.paths.length) shapes.push({ paths: op.paths, matrix: op.matrix });
+    if (op.kind === 'shape' && op.paths.length) {
+      const coverage = matteCoverage(op.fills, luma);
+      const shape: ClipShape = { paths: op.paths, matrix: op.matrix };
+      if (coverage < 1) shape.coverage = coverage;
+      shapes.push(shape);
+    }
   }
   const inverted = tt === 2 || tt === 4;
   if (!shapes.length) return inverted ? [] : [{ shapes: [], mode: 1 }];

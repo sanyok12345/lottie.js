@@ -93,6 +93,36 @@ function wrapClips(inner: string, clips: Clip[], ctx: Defs): string | null {
   for (let i = clips.length - 1; i >= 0; i--) {
     const clip = clips[i];
     const subtractive = clip.mode === 2 || clip.mode === 3;
+    const soft = clip.shapes.some((s) => s.coverage !== undefined && s.coverage < 1);
+    if (soft) {
+      let content = '';
+      for (const shape of clip.shapes) {
+        const d = shape.paths.map(pathToD).filter(Boolean).join(' ');
+        if (!d) continue;
+        const tr = isIdentity(shape.matrix) ? '' : ` transform="${toSvg(shape.matrix)}"`;
+        let g = Math.round(Math.min(1, Math.max(0, shape.coverage ?? 1)) * 255);
+        if (subtractive) g = 255 - g;
+        content += `<path d="${d}" fill="rgb(${g},${g},${g})"${tr}/>`;
+      }
+      if (!content) {
+        if (clip.mode === 1) return null;
+        continue;
+      }
+      const pad = Math.max(ctx.sceneW, ctx.sceneH) * 4;
+      const bg = subtractive ? 255 : 0;
+      const id = `${ctx.idPrefix}-mask-${ctx.nextId++}`;
+      ctx.defs.push(
+        `<mask id="${id}" maskUnits="userSpaceOnUse" x="${fmt(-pad)}" y="${fmt(-pad)}"` +
+        ` width="${fmt(pad * 2 + ctx.sceneW)}" height="${fmt(pad * 2 + ctx.sceneH)}">` +
+        `<rect x="${fmt(-pad)}" y="${fmt(-pad)}" width="${fmt(pad * 2 + ctx.sceneW)}"` +
+        ` height="${fmt(pad * 2 + ctx.sceneH)}" fill="rgb(${bg},${bg},${bg})"/>${content}</mask>`
+      );
+      out = `<g mask="url(#${id})">${out}</g>`;
+      if (clip.mode === 1 && clip.alpha !== undefined && clip.alpha < 1) {
+        out = `<g opacity="${fmt(clip.alpha)}">${out}</g>`;
+      }
+      continue;
+    }
     let content = '';
     for (const shape of clip.shapes) {
       const d = shape.paths.map(pathToD).filter(Boolean).join(' ');

@@ -84,19 +84,46 @@ export function rasterize(scene: Scene, options: RenderOptions = {}): RGBAImage 
 function clipCoverage(r: Raster, clips: Clip[], sx: number, sy: number): Float32Array | null {
   const buf = r.acquireClipBuf();
   for (const stage of clips) {
-    const rings: Ring[] = [];
-    for (const shape of stage.shapes) {
-      const m = shape.matrix;
-      const dm = [m[0] * sx, m[1] * sy, m[2] * sx, m[3] * sy, m[4] * sx, m[5] * sy];
-      avgScale(dm);
-      for (const p of shape.paths) flattenPath(p, dm, rings);
+    const soft = stage.shapes.some((s) => s.coverage !== undefined && s.coverage < 1);
+    let tmp: Float32Array | null = null;
+    if (soft) {
+      tmp = r.acquireStageBuf();
+      let any = false;
+      for (const shape of stage.shapes) {
+        const m = shape.matrix;
+        const dm = [m[0] * sx, m[1] * sy, m[2] * sx, m[3] * sy, m[4] * sx, m[5] * sy];
+        avgScale(dm);
+        const rings: Ring[] = [];
+        for (const p of shape.paths) flattenPath(p, dm, rings);
+        if (!rings.length) continue;
+        any = true;
+        const cover = shape.coverage ?? 1;
+        const sb = r.acquireShapeBuf();
+        r.coverageRings(rings, sb);
+        for (let i = 0; i < tmp.length; i++) {
+          const c = sb[i];
+          if (c > 0) tmp[i] = tmp[i] * (1 - c) + cover * c;
+        }
+      }
+      if (!any) {
+        if (stage.mode === 1) return null;
+        continue;
+      }
+    } else {
+      const rings: Ring[] = [];
+      for (const shape of stage.shapes) {
+        const m = shape.matrix;
+        const dm = [m[0] * sx, m[1] * sy, m[2] * sx, m[3] * sy, m[4] * sx, m[5] * sy];
+        avgScale(dm);
+        for (const p of shape.paths) flattenPath(p, dm, rings);
+      }
+      if (!rings.length) {
+        if (stage.mode === 1) return null;
+        continue;
+      }
+      tmp = r.acquireStageBuf();
+      r.coverageRings(rings, tmp);
     }
-    if (!rings.length) {
-      if (stage.mode === 1) return null;
-      continue;
-    }
-    const tmp = r.acquireStageBuf();
-    r.coverageRings(rings, tmp);
     const a = stage.alpha ?? 1;
     if (stage.mode === 1) {
       for (let i = 0; i < buf.length; i++) buf[i] *= tmp[i] * a;
