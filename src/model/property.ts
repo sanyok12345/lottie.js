@@ -4,8 +4,23 @@ import type { Animatable, AnimValue, Keyframe } from './types.js';
 
 type Easing = (x: number) => number;
 
+let slots: Record<string, any> | null = null;
+
+export function setSlots(s: Record<string, any> | null | undefined): void {
+  slots = s ?? null;
+}
+
+function resolved(prop: Animatable): Animatable {
+  if (slots && typeof prop.sid === 'string') {
+    const slot = slots[prop.sid];
+    if (slot && typeof slot === 'object' && slot.p) return slot.p as Animatable;
+  }
+  return prop;
+}
+
 export function evaluate(prop: Animatable | undefined, frame: number): any {
   if (prop == null) return undefined;
+  prop = resolved(prop);
   if (prop.k === undefined) return undefined;
   if (!animated(prop)) return prop.k as AnimValue;
   return evaluateKeyframes(prop.k as Keyframe[], frame);
@@ -15,7 +30,9 @@ export const scalar = (v: AnimValue | undefined): number | undefined =>
   Array.isArray(v) ? v[0] : typeof v === 'number' ? v : undefined;
 
 export function isStatic(prop: Animatable | undefined): boolean {
-  return prop == null || prop.k === undefined || !animated(prop);
+  if (prop == null) return true;
+  prop = resolved(prop);
+  return prop.k === undefined || !animated(prop);
 }
 
 function animated(prop: Animatable): boolean {
