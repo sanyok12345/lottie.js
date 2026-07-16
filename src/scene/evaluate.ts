@@ -530,7 +530,7 @@ function modOf(item: ShapeItem): Mod | null {
       return (paths, frame) => {
         const a = scalar(evaluate(item.a, frame)) ?? 0;
         const ml = scalar(evaluate(item.ml, frame)) ?? item.ml ?? 4;
-        return a ? paths.map((p) => offsetPath(p, a, ml)) : paths;
+        return a ? paths.map((p) => offsetPath(p, a, ml, item.lj ?? 2)) : paths;
       };
     default:
       return null;

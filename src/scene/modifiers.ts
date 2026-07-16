@@ -404,63 +404,129 @@ export function twist(p: PathData, angleDeg: number, center: Point): PathData {
   return { c: p.c, v, i, o };
 }
 
-export function offsetPath(p: PathData, amount: number, miterLimit: number): PathData {
-  const n = p.v.length;
-  if (n < 2 || !amount) return p;
-  const dirAt = (j: number, incoming: boolean): [number, number] => {
-    const cur = p.v[j];
-    const iT = p.i?.[j] ?? [0, 0];
-    const oT = p.o?.[j] ?? [0, 0];
-    if (incoming) {
-      if (iT[0] || iT[1]) return norm(-iT[0], -iT[1]);
-      const prev = p.v[(j - 1 + n) % n];
-      const po = p.o?.[(j - 1 + n) % n] ?? [0, 0];
-      if (po[0] || po[1]) {
-        return norm(cur[0] - (prev[0] + po[0]), cur[1] - (prev[1] + po[1]));
-      }
-      return norm(cur[0] - prev[0], cur[1] - prev[1]);
-    }
-    if (oT[0] || oT[1]) return norm(oT[0], oT[1]);
-    const next = p.v[(j + 1) % n];
-    return norm(next[0] - cur[0], next[1] - cur[1]);
-  };
+interface OffSeg {
+  p0: Point;
+  c1: Point;
+  c2: Point;
+  p3: Point;
+  dStart: Point;
+  dEnd: Point;
+  jointStart: Point;
+  jointEnd: Point;
+}
 
-  const maxLen = Math.abs(amount) * Math.max(1, miterLimit || 4);
+const unit = (a: Point, b: Point): Point | null => {
+  const dx = b[0] - a[0];
+  const dy = b[1] - a[1];
+  const l = Math.hypot(dx, dy);
+  return l < 1e-9 ? null : [dx / l, dy / l];
+};
+
+function lineIntersect(a: Point, ad: Point, b: Point, bd: Point): Point | null {
+  const det = ad[0] * bd[1] - ad[1] * bd[0];
+  if (Math.abs(det) < 1e-9) return null;
+  const t = ((b[0] - a[0]) * bd[1] - (b[1] - a[1]) * bd[0]) / det;
+  return [a[0] + ad[0] * t, a[1] + ad[1] * t];
+}
+
+function offsetSeg(s: Seg, d: number): OffSeg {
+  const p0: Point = [s.ax, s.ay];
+  const p1: Point = [s.c1x, s.c1y];
+  const p2: Point = [s.c2x, s.c2y];
+  const p3: Point = [s.bx, s.by];
+  const d1 = unit(p0, p1) ?? unit(p0, p2) ?? unit(p0, p3) ?? [1, 0];
+  const d2 = unit(p1, p2) ?? d1;
+  const d3 = unit(p2, p3) ?? d2;
+  const n1: Point = [d1[1] * d, -d1[0] * d];
+  const n2: Point = [d2[1] * d, -d2[0] * d];
+  const n3: Point = [d3[1] * d, -d3[0] * d];
+  const q0: Point = [p0[0] + n1[0], p0[1] + n1[1]];
+  const q3: Point = [p3[0] + n3[0], p3[1] + n3[1]];
+  const q1 =
+    lineIntersect(q0, d1, [p1[0] + n2[0], p1[1] + n2[1]], d2) ??
+    ([p1[0] + (n1[0] + n2[0]) / 2, p1[1] + (n1[1] + n2[1]) / 2] as Point);
+  const q2 =
+    lineIntersect([p1[0] + n2[0], p1[1] + n2[1]], d2, q3, d3) ??
+    ([p2[0] + (n2[0] + n3[0]) / 2, p2[1] + (n2[1] + n3[1]) / 2] as Point);
+  return { p0: q0, c1: q1, c2: q2, p3: q3, dStart: d1, dEnd: d3, jointStart: p0, jointEnd: p3 };
+}
+
+export function offsetPath(p: PathData, amount: number, miterLimit: number, join = 2): PathData {
+  if (!amount || p.v.length < 2) return p;
+  const segs = segmentsOf(p);
+  if (!segs.length) return p;
+
+  const off: OffSeg[] = [];
+  for (const s of segs) {
+    const curved = s.c1x !== s.ax || s.c1y !== s.ay || s.c2x !== s.bx || s.c2y !== s.by;
+    if (curved) {
+      off.push(offsetSeg(subSeg(s, 0, 0.5), amount), offsetSeg(subSeg(s, 0.5, 1), amount));
+    } else {
+      off.push(offsetSeg(s, amount));
+    }
+  }
+
   const v: Point[] = [];
   const i: Point[] = [];
   const o: Point[] = [];
-  for (let j = 0; j < n; j++) {
-    const first = !p.c && j === 0;
-    const last = !p.c && j === n - 1;
-    const din = first ? dirAt(j, false) : dirAt(j, true);
-    const dout = last ? dirAt(j, true) : dirAt(j, false);
-    let bx = din[0] + dout[0];
-    let by = din[1] + dout[1];
-    const bl = Math.hypot(bx, by);
-    let nx: number;
-    let ny: number;
-    if (bl < 1e-6) {
-      nx = -din[1];
-      ny = din[0];
-    } else {
-      bx /= bl;
-      by /= bl;
-      nx = -by;
-      ny = bx;
-      const cosHalf = Math.max(0.1, nx * -din[1] + ny * din[0]);
-      const scale = Math.min(1 / cosHalf, maxLen / Math.abs(amount));
-      nx *= scale;
-      ny *= scale;
+  const push = (pt: Point, inn: Point, out: Point): void => {
+    v.push(pt);
+    i.push(inn);
+    o.push(out);
+  };
+
+  const r = Math.abs(amount);
+  const maxMiter = Math.max(1, miterLimit || 4) * r;
+  let carryIn: Point = [0, 0];
+  let firstIn: Point | null = null;
+
+  for (let idx = 0; idx < off.length; idx++) {
+    const seg = off[idx];
+    push(seg.p0, carryIn, [seg.c1[0] - seg.p0[0], seg.c1[1] - seg.p0[1]]);
+    carryIn = [0, 0];
+
+    const wrap = idx === off.length - 1;
+    const next = wrap ? (p.c ? off[0] : null) : off[idx + 1];
+    let endOut: Point = [0, 0];
+    let miterPt: Point | null = null;
+
+    if (next) {
+      const joint = seg.jointEnd;
+      const gap = Math.hypot(next.p0[0] - seg.p3[0], next.p0[1] - seg.p3[1]);
+      if (gap > 1e-6) {
+        if (join === 2) {
+          const a0 = Math.atan2(seg.p3[1] - joint[1], seg.p3[0] - joint[0]);
+          const a1 = Math.atan2(next.p0[1] - joint[1], next.p0[0] - joint[0]);
+          let sweep = a1 - a0;
+          while (sweep > Math.PI) sweep -= 2 * Math.PI;
+          while (sweep < -Math.PI) sweep += 2 * Math.PI;
+          const k = (4 / 3) * Math.tan(sweep / 4) * r;
+          endOut = [-Math.sin(a0) * k, Math.cos(a0) * k];
+          const inHandle: Point = [Math.sin(a1) * k, -Math.cos(a1) * k];
+          if (wrap) firstIn = inHandle;
+          else carryIn = inHandle;
+        } else if (join === 1) {
+          const m = lineIntersect(seg.p3, seg.dEnd, next.p0, next.dStart);
+          if (m && Math.hypot(m[0] - joint[0], m[1] - joint[1]) <= maxMiter) miterPt = m;
+        }
+      }
     }
-    const off: Point = [nx * amount, ny * amount];
-    v.push([p.v[j][0] + off[0], p.v[j][1] + off[1]]);
-    i.push(p.i?.[j] ?? [0, 0]);
-    o.push(p.o?.[j] ?? [0, 0]);
+
+    push(seg.p3, [seg.c2[0] - seg.p3[0], seg.c2[1] - seg.p3[1]], endOut);
+    if (miterPt) push(miterPt, [0, 0], [0, 0]);
   }
+
+  if (firstIn) i[0] = firstIn;
   return { c: p.c, v, i, o };
 }
 
-function norm(x: number, y: number): [number, number] {
-  const l = Math.hypot(x, y) || 1;
-  return [x / l, y / l];
+export function signedArea(p: PathData): number {
+  let area = 0;
+  const n = p.v.length;
+  for (let j = 0; j < n; j++) {
+    const a = p.v[j];
+    const b = p.v[(j + 1) % n];
+    area += a[0] * b[1] - b[0] * a[1];
+  }
+  return area / 2;
 }
