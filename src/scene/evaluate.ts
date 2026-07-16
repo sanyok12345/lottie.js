@@ -12,6 +12,7 @@ import { positionAt, transformMatrix, transformOpacity } from './transform.js';
 import { ellipsePath, polystarPath, rectPath, reversePath } from './shape.js';
 import {
   offsetPath,
+  pathSampler,
   puckerBloat,
   roundCorners,
   signedArea,
@@ -19,7 +20,15 @@ import {
   twist,
   zigZag,
 } from './modifiers.js';
-import { isStaticDoc, layoutText, textDocAt, textEnv, type TextEnv } from './text.js';
+import {
+  hasAnimators,
+  isStaticDoc,
+  layoutText,
+  textAnimators,
+  textDocAt,
+  textEnv,
+  type TextEnv,
+} from './text.js';
 import type { Asset, Layer, LottieData, ShapeItem, Transform } from '../model/types.js';
 import type {
   Clip,
@@ -485,49 +494,127 @@ function layer_(
       if (!ctx.text) return;
       const doc = textDocAt(layer, frame);
       if (!doc) return;
-      let paths = textPathsCache.get(doc);
-      if (!paths) {
-        paths = [];
-        for (const g of layoutText(doc, ctx.text)) {
-          const gm = multiply(translation(g.x, g.y), scaling(g.scale, g.scale));
-          for (const item of g.glyph.shapes) {
-            if (!item || item.hd) continue;
-            if (item.ty === 'gr') collectPaths(item, frame, gm, paths);
-            else {
-              const geo = geomOf(item, frame);
-              if (geo) paths.push(transformPath(geo.path, gm));
+      const pathOpts = layer.t?.p;
+      const pathMask =
+        pathOpts && typeof pathOpts.m === 'number'
+          ? layer.masksProperties?.[pathOpts.m]
+          : undefined;
+
+      if (!hasAnimators(layer) && !pathMask) {
+        let paths = textPathsCache.get(doc);
+        if (!paths) {
+          paths = [];
+          for (const g of layoutText(doc, ctx.text)) {
+            const gm = multiply(translation(g.x, g.y), scaling(g.scale, g.scale));
+            for (const item of g.glyph.shapes) {
+              if (!item || item.hd) continue;
+              if (item.ty === 'gr') collectPaths(item, frame, gm, paths);
+              else {
+                const geo = geomOf(item, frame);
+                if (geo) paths.push(transformPath(geo.path, gm));
+              }
             }
           }
+          textPathsCache.set(doc, paths);
         }
-        textPathsCache.set(doc, paths);
+        if (!paths.length) return;
+        const fills: FillPaint[] = [];
+        const strokes: StrokePaint[] = [];
+        if (Array.isArray(doc.fc)) {
+          fills.push({ kind: 'color', color: to255(doc.fc), alpha: opacity, rule: 1 });
+        }
+        if (Array.isArray(doc.sc) && (doc.sw ?? 0) > 0) {
+          strokes.push({
+            kind: 'color',
+            color: to255(doc.sc),
+            alpha: opacity,
+            width: doc.sw ?? 1,
+            cap: 2,
+            join: 2,
+          });
+        }
+        if (!fills.length && !strokes.length) {
+          fills.push({ kind: 'color', color: [0, 0, 0], alpha: opacity, rule: 1 });
+        }
+        ctx.ops.push({
+          kind: 'shape',
+          paths,
+          matrix: m,
+          fills,
+          strokes,
+          static: staticMx && isStaticDoc(layer),
+        });
+        break;
       }
-      if (!paths.length) return;
-      const fills: FillPaint[] = [];
-      const strokes: StrokePaint[] = [];
-      if (Array.isArray(doc.fc)) {
-        fills.push({ kind: 'color', color: to255(doc.fc), alpha: opacity, rule: 1 });
+
+      const placed = layoutText(doc, ctx.text);
+      if (!placed.length) return;
+      const totalChars = placed[placed.length - 1].charIndex + 1;
+      const mods = textAnimators(layer, frame, placed, totalChars);
+
+      let sampler = null;
+      let margin = 0;
+      if (pathMask) {
+        const pd = evaluate(pathMask.pt, frame) as PathData | undefined;
+        if (pd && Array.isArray(pd.v) && pd.v.length) sampler = pathSampler(pd);
+        margin = scalar(evaluate(pathOpts.f, frame)) ?? 0;
       }
-      if (Array.isArray(doc.sc) && (doc.sw ?? 0) > 0) {
-        strokes.push({
-          kind: 'color',
-          color: to255(doc.sc),
-          alpha: opacity,
-          width: doc.sw ?? 1,
-          cap: 2,
-          join: 2,
+
+      const baseColor = Array.isArray(doc.fc) ? doc.fc : [0, 0, 0];
+      for (let gi = 0; gi < placed.length; gi++) {
+        const g = placed[gi];
+        const md = mods ? mods[gi] : null;
+        const charAlpha = opacity * (md ? Math.min(1, Math.max(0, md.opacity)) : 1);
+        if (charAlpha <= 0) continue;
+
+        let cm: Matrix;
+        if (sampler) {
+          const pt = sampler.at(margin + g.x + (md?.dx ?? 0));
+          cm = multiply(translation(pt.x, pt.y), rotation((pt.angle * 180) / Math.PI));
+          const dy = (md?.dy ?? 0) + (doc.ls ?? 0);
+          if (dy) cm = multiply(cm, translation(0, dy));
+        } else {
+          cm = translation(g.x + (md?.dx ?? 0), g.y + (md?.dy ?? 0));
+        }
+        if (md?.rot) cm = multiply(cm, rotation(md.rot));
+        cm = multiply(cm, scaling(g.scale * (md?.sx ?? 1), g.scale * (md?.sy ?? 1)));
+
+        const paths: PathData[] = [];
+        for (const item of g.glyph.shapes) {
+          if (!item || item.hd) continue;
+          if (item.ty === 'gr') collectPaths(item, frame, cm, paths);
+          else {
+            const geo = geomOf(item, frame);
+            if (geo) paths.push(transformPath(geo.path, cm));
+          }
+        }
+        if (!paths.length) continue;
+
+        let color = baseColor;
+        if (md?.fcColor && md.fcF) {
+          const w = md.fcF;
+          color = baseColor.map((c, k) => c + ((md.fcColor![k] ?? c) - c) * w);
+        }
+        const strokes: StrokePaint[] = [];
+        if (Array.isArray(doc.sc) && (doc.sw ?? 0) > 0) {
+          strokes.push({
+            kind: 'color',
+            color: to255(doc.sc),
+            alpha: charAlpha,
+            width: doc.sw ?? 1,
+            cap: 2,
+            join: 2,
+          });
+        }
+        ctx.ops.push({
+          kind: 'shape',
+          paths,
+          matrix: m,
+          fills: [{ kind: 'color', color: to255(color), alpha: charAlpha, rule: 1 }],
+          strokes,
+          static: false,
         });
       }
-      if (!fills.length && !strokes.length) {
-        fills.push({ kind: 'color', color: [0, 0, 0], alpha: opacity, rule: 1 });
-      }
-      ctx.ops.push({
-        kind: 'shape',
-        paths,
-        matrix: m,
-        fills,
-        strokes,
-        static: staticMx && isStaticDoc(layer),
-      });
       break;
     }
     case TY_IMAGE: {

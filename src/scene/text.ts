@@ -1,3 +1,4 @@
+import { evaluate, scalar } from '../model/property.js';
 import type { Layer, LottieData, ShapeItem } from '../model/types.js';
 
 export interface GlyphDef {
@@ -70,6 +71,106 @@ export function textDocAt(layer: Layer, frame: number): TextDoc | undefined {
 export function isStaticDoc(layer: Layer): boolean {
   const k = layer.t?.d?.k;
   return !Array.isArray(k) || k.length <= 1;
+}
+
+export interface CharMod {
+  dx: number;
+  dy: number;
+  sx: number;
+  sy: number;
+  rot: number;
+  opacity: number;
+  fcColor?: number[];
+  fcF?: number;
+}
+
+function shapeFactor(shape: number, u: number, lo: number, hi: number): number {
+  if (hi <= lo) return 0;
+  if (u < lo || u >= hi) return 0;
+  const t = (u - lo) / (hi - lo);
+  switch (shape) {
+    case 2:
+      return t;
+    case 3:
+      return 1 - t;
+    case 4:
+      return 1 - Math.abs(t * 2 - 1);
+    case 5:
+      return Math.sqrt(Math.max(0, 1 - (t * 2 - 1) ** 2));
+    case 6: {
+      const x = 1 - Math.abs(t * 2 - 1);
+      return x * x * (3 - 2 * x);
+    }
+    default:
+      return 1;
+  }
+}
+
+export function hasAnimators(layer: Layer): boolean {
+  const a = layer.t?.a;
+  return Array.isArray(a) && a.length > 0;
+}
+
+export function textAnimators(
+  layer: Layer,
+  frame: number,
+  chars: PlacedGlyph[],
+  totalChars: number
+): CharMod[] | null {
+  const anims = layer.t?.a;
+  if (!Array.isArray(anims) || !anims.length || !chars.length) return null;
+  const mods: CharMod[] = chars.map(() => ({ dx: 0, dy: 0, sx: 1, sy: 1, rot: 0, opacity: 1 }));
+
+  for (const an of anims) {
+    if (!an) continue;
+    const sel = an.s ?? {};
+    const props = an.a ?? {};
+    const sVal = scalar(evaluate(sel.s, frame)) ?? 0;
+    const eVal = sel.e !== undefined ? scalar(evaluate(sel.e, frame)) ?? 100 : 100;
+    const oVal = scalar(evaluate(sel.o, frame)) ?? 0;
+    const amount = sel.a !== undefined ? (scalar(evaluate(sel.a, frame)) ?? 100) / 100 : 1;
+    const shape = sel.sh ?? 1;
+    const units = sel.r ?? 1;
+
+    const p = evaluate(props.p, frame);
+    const sc = evaluate(props.s, frame);
+    const rot = scalar(evaluate(props.r, frame)) ?? 0;
+    const op = props.o !== undefined ? scalar(evaluate(props.o, frame)) : undefined;
+    const fc = props.fc ? evaluate(props.fc, frame) : undefined;
+    const trk = scalar(evaluate(props.t, frame)) ?? 0;
+
+    let lo = sVal + oVal;
+    let hi = eVal + oVal;
+    if (hi < lo) [lo, hi] = [hi, lo];
+
+    let cumTrack = 0;
+    for (let ci = 0; ci < chars.length; ci++) {
+      const idx = chars[ci].charIndex;
+      const u = units === 2 ? idx : ((idx + 0.5) / Math.max(1, totalChars)) * 100;
+      const f = shapeFactor(shape, u, lo, hi) * amount;
+      if (trk) {
+        cumTrack += trk * f;
+        mods[ci].dx += cumTrack;
+      }
+      if (!f) continue;
+      const m = mods[ci];
+      if (Array.isArray(p)) {
+        m.dx += (p[0] ?? 0) * f;
+        m.dy += (p[1] ?? 0) * f;
+      }
+      if (Array.isArray(sc)) {
+        m.sx *= 1 + ((sc[0] ?? 100) / 100 - 1) * f;
+        m.sy *= 1 + (((sc[1] ?? sc[0] ?? 100) as number) / 100 - 1) * f;
+      }
+      if (rot) m.rot += rot * f;
+      if (op !== undefined && op !== null) m.opacity *= 1 + (op / 100 - 1) * f;
+      if (Array.isArray(fc)) {
+        m.fcColor = fc;
+        m.fcF = Math.min(1, Math.max(0, f));
+      }
+    }
+  }
+  return mods;
 }
 
 export function layoutText(doc: TextDoc, env: TextEnv): PlacedGlyph[] {

@@ -520,6 +520,35 @@ export function offsetPath(p: PathData, amount: number, miterLimit: number, join
   return { c: p.c, v, i, o };
 }
 
+export interface PathSampler {
+  length: number;
+  at(d: number): { x: number; y: number; angle: number };
+}
+
+export function pathSampler(p: PathData): PathSampler | null {
+  const segs = segmentsOf(p);
+  if (!segs.length) return null;
+  const L = totalLen(segs);
+  return {
+    length: L,
+    at(d: number) {
+      let pos = 0;
+      let clamped = Math.min(Math.max(d, 0), L);
+      for (let j = 0; j < segs.length; j++) {
+        const s = segs[j];
+        if (clamped <= pos + s.len || j === segs.length - 1) {
+          const t = tAtLength(s, Math.min(Math.max(clamped - pos, 0), s.len));
+          const [x, y] = pointAt(s, t);
+          const [tx, ty] = tangentAt(s, t);
+          return { x, y, angle: Math.atan2(ty, tx) };
+        }
+        pos += s.len;
+      }
+      return { x: segs[0].ax, y: segs[0].ay, angle: 0 };
+    },
+  };
+}
+
 export function signedArea(p: PathData): number {
   let area = 0;
   const n = p.v.length;
