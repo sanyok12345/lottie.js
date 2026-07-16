@@ -755,12 +755,16 @@ function shapeItems(
   }
 
   let outPaths = paths;
-  if (mergeMode === 3 && outPaths.length > 1) {
-    outPaths = [outPaths[0], ...outPaths.slice(1).map(reversePath)];
-  }
   for (const item of mods) {
     const mod = modOf(item);
     if (mod) outPaths = mod(outPaths, frame);
+  }
+  let mergeClips: Clip[] | undefined;
+  if ((mergeMode === 3 || mergeMode === 4) && outPaths.length > 1) {
+    mergeClips = [
+      { shapes: [{ paths: outPaths.slice(1), matrix }], mode: mergeMode === 3 ? 2 : 1 },
+    ];
+    outPaths = [outPaths[0]];
   }
 
   for (let i = subgroups.length - 1; i >= 0; i--) {
@@ -784,6 +788,7 @@ function shapeItems(
       matrix,
       fills,
       strokes,
+      clips: mergeClips,
       static: staticMatrix && geomStatic,
     });
   }
