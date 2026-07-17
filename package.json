@@ -1,6 +1,6 @@
 {
   "name": "lottie.js",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "A fast, dependency-free Lottie engine for every JavaScript runtime and environment",
   "type": "module",
   "main": "./dist/lottie.cjs",
@@ -24,6 +24,7 @@
   },
   "homepage": "https://github.com/sanyok12345/lottie.js#readme",
   "bugs": "https://github.com/sanyok12345/lottie.js/issues",
+  "funding": "https://github.com/sponsors/sanyok12345",
   "scripts": {
     "build": "tsup && tsc --emitDeclarationOnly",
     "typecheck": "tsc --noEmit",
