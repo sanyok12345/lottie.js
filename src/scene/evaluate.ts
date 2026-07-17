@@ -62,6 +62,8 @@ const textEnvCache = new WeakMap<LottieData, TextEnv | null>();
 const textPathsCache = new WeakMap<object, PathData[]>();
 
 export function sceneAt(data: LottieData, frame: number): Scene {
+  const op = data.op ?? 0;
+  if (op > (data.ip ?? 0) && frame >= op) frame = op - 1e-3;
   setSlots(data.slots);
   setExpressionFrameRate(data.fr ?? 30);
   let env = textEnvCache.get(data);
