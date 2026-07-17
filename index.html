@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>lottie.js, a dependency-free Lottie engine for every JavaScript runtime</title>
+<meta name="description" content="lottie.js parses Lottie animations into a renderer-agnostic scene and draws it to Canvas2D, SVG, or raw pixels. No dependencies, no DOM, no eval. Browser, server, React Native, workers.">
+<style>
+  :root {
+    --bg: #101216;
+    --panel: #171a20;
+    --border: #262b34;
+    --text: #dbe1ea;
+    --muted: #8b95a5;
+    --accent: #4da3ff;
+    --code-bg: #14171d;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  main { max-width: 880px; margin: 0 auto; padding: 0 24px 96px; }
+  header { padding: 88px 0 32px; }
+  h1 { font-size: 44px; margin: 0 0 12px; letter-spacing: -1px; }
+  .tagline { font-size: 20px; color: var(--muted); margin: 0; max-width: 640px; }
+  .links { margin: 28px 0 0; display: flex; gap: 12px; flex-wrap: wrap; }
+  .links a {
+    display: inline-block; padding: 10px 18px; border-radius: 8px;
+    text-decoration: none; font-weight: 500; font-size: 15px;
+  }
+  .links a.primary { background: var(--accent); color: #0b1017; }
+  .links a.ghost { border: 1px solid var(--border); color: var(--text); }
+  h2 { font-size: 22px; margin: 56px 0 12px; letter-spacing: -0.3px; }
+  p { color: var(--text); }
+  p.dim { color: var(--muted); }
+  pre {
+    background: var(--code-bg); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 18px; overflow-x: auto; font-size: 14px; line-height: 1.55;
+  }
+  code { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  p code, li code {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 5px; padding: 1px 6px; font-size: 14px;
+  }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-top: 20px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px;
+  }
+  .card h3 { margin: 0 0 6px; font-size: 16px; }
+  .card p { margin: 0; font-size: 14px; color: var(--muted); }
+  ul { padding-left: 20px; }
+  li { margin: 4px 0; }
+  footer { margin-top: 72px; padding-top: 24px; border-top: 1px solid var(--border); color: var(--muted); font-size: 14px; }
+  a { color: var(--accent); }
+  .kw { color: #c792ea; } .fn { color: #82aaff; } .str { color: #c3e88d; } .cm { color: #5c6773; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>lottie.js</h1>
+    <p class="tagline">A fast, dependency-free Lottie engine for every JavaScript runtime
+    and environment. No DOM, no eval, no native code.</p>
+    <div class="links">
+      <a class="primary" href="https://github.com/sanyok12345/lottie.js">GitHub</a>
+      <a class="ghost" href="https://www.npmjs.com/package/lottie.js">npm</a>
+    </div>
+  </header>
+
+  <h2>Install</h2>
+  <pre><code>npm install lottie.js</code></pre>
+
+  <h2>Quick start</h2>
+  <pre><code><span class="kw">import</span> { parse, CanvasSurface } <span class="kw">from</span> <span class="str">'lottie.js'</span>;
+
+<span class="kw">const</span> anim = <span class="fn">parse</span>(json);
+<span class="kw">const</span> surface = <span class="kw">new</span> <span class="fn">CanvasSurface</span>(canvas.<span class="fn">getContext</span>(<span class="str">'2d'</span>));
+surface.<span class="fn">render</span>(anim, <span class="fn">30</span>);</code></pre>
+
+  <p>On a server, render straight to PNG bytes without a headless browser:</p>
+  <pre><code><span class="kw">import</span> { parse, ImageSurface } <span class="kw">from</span> <span class="str">'lottie.js'</span>;
+
+<span class="kw">const</span> png = <span class="kw">await</span> <span class="kw">new</span> <span class="fn">ImageSurface</span>(<span class="fn">512</span>, <span class="fn">512</span>).<span class="fn">png</span>(<span class="fn">parse</span>(json), <span class="fn">0</span>);</code></pre>
+
+  <h2>Why lottie.js</h2>
+  <div class="grid">
+    <div class="card">
+      <h3>Zero dependencies</h3>
+      <p>The core has no runtime dependencies, no node: modules, and makes no
+      assumption about its host. It runs in browsers, Node, Deno, Bun, Web
+      Workers, and edge runtimes.</p>
+    </div>
+    <div class="card">
+      <h3>Server rendering</h3>
+      <p>A pure JavaScript rasterizer renders animations to RGBA pixels and PNG
+      on the server. No headless browser, no native bindings.</p>
+    </div>
+    <div class="card">
+      <h3>CSP-safe</h3>
+      <p>No eval, no Function constructor, no inline script tricks. It works
+      under the strictest Content Security Policy.</p>
+    </div>
+    <div class="card">
+      <h3>Three surfaces, one scene</h3>
+      <p>Canvas2D for playback, SVG strings for static output, raw pixels for
+      servers. All three draw the same renderer-agnostic scene.</p>
+    </div>
+    <div class="card">
+      <h3>Embeddable anywhere</h3>
+      <p>The evaluated scene is plain data: matrices, cubic contours, paints.
+      Feed it to Skia in React Native, WebGL, or any custom backend.</p>
+    </div>
+    <div class="card">
+      <h3>Small and disposable</h3>
+      <p>A fraction of the size of lottie-web, with a real destroy() and no
+      leaks. Playback is a thin, clockless driver you can tick by hand.</p>
+    </div>
+  </div>
+
+  <h2>Format coverage</h2>
+  <p>The full 2D vector feature set: shapes with every modifier (trim paths,
+  repeaters, polystars, rounded corners, offset paths with real joins, zig
+  zag, boolean merge paths), gradient fills and strokes with dashes, masks
+  with all seven modes plus opacity and expansion, alpha and luminance track
+  mattes, all blend modes, motion blur, precompositions with time remapping,
+  image layers, slots, and text layers from embedded glyphs with animators
+  and text on a path.</p>
+  <p class="dim">Expressions plug in through an optional evaluator hook, so
+  the core stays eval-free. Layer effects are next on the roadmap.</p>
+
+  <h2>Custom renderers</h2>
+  <pre><code><span class="kw">for</span> (<span class="kw">const</span> op <span class="kw">of</span> anim.<span class="fn">sceneAt</span>(frame).ops) {
+  <span class="cm">// op.matrix : [a, b, c, d, tx, ty]</span>
+  <span class="cm">// op.paths  : cubic bezier contours</span>
+  <span class="cm">// op.fills, op.strokes, op.clips, op.blend</span>
+}</code></pre>
+
+  <footer>
+    MIT licensed. Built and maintained by
+    <a href="https://github.com/sanyok12345">sanyok12345</a>.
+  </footer>
+</main>
+</body>
+</html>
