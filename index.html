@@ -3,145 +3,1261 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>lottie.js, a dependency-free Lottie engine for every JavaScript runtime</title>
-<meta name="description" content="lottie.js parses Lottie animations into a renderer-agnostic scene and draws it to Canvas2D, SVG, or raw pixels. No dependencies, no DOM, no eval. Browser, server, React Native, workers.">
+<title>lottie.js - dependency-free Lottie engine for browser, server and React Native</title>
+<meta name="description" content="lottie.js renders Lottie (Bodymovin) animations to Canvas2D, SVG, or PNG in pure JavaScript. Zero dependencies, no DOM, no eval, CSP-safe. Works in browsers, Node.js, Deno, Bun, Web Workers, and React Native.">
+<link rel="canonical" href="https://lottie.js.org/">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://lottie.js.org/">
+<meta property="og:title" content="lottie.js - dependency-free Lottie engine for every JavaScript runtime">
+<meta property="og:description" content="Render Lottie animations to Canvas2D, SVG, or PNG in pure JavaScript. Zero dependencies, no DOM, no eval. Browser, server, workers, React Native.">
+<meta property="og:image" content="https://lottie.js.org/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="lottie.js - dependency-free Lottie engine">
+<meta name="twitter:description" content="Render Lottie animations to Canvas2D, SVG, or PNG in pure JavaScript. Zero dependencies, no DOM, no eval.">
+<meta name="twitter:image" content="https://lottie.js.org/og.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23ffe70b'/%3E%3Ctext x='29' y='29' font-family='Helvetica,Arial,sans-serif' font-size='26' font-weight='700' text-anchor='end'%3EL%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareSourceCode",
+  "name": "lottie.js",
+  "description": "A fast, dependency-free Lottie engine for every JavaScript runtime and environment. Renders Lottie animations to Canvas2D, SVG, or raw pixels.",
+  "url": "https://lottie.js.org/",
+  "codeRepository": "https://github.com/sanyok12345/lottie.js",
+  "programmingLanguage": "TypeScript",
+  "runtimePlatform": ["Browser", "Node.js", "Deno", "Bun", "React Native", "Web Workers"],
+  "license": "https://opensource.org/licenses/MIT",
+  "author": { "@type": "Person", "name": "sanyok12345", "url": "https://github.com/sanyok12345" }
+}
+</script>
 <style>
   :root {
-    --bg: #101216;
-    --panel: #171a20;
-    --border: #262b34;
-    --text: #dbe1ea;
-    --muted: #8b95a5;
-    --accent: #4da3ff;
-    --code-bg: #14171d;
+    --yellow: #ffe70b;
+    --bg: #fff;
+    --band: #ffe70b;
+    --band-text: #000;
+    --tile-bg: #000;
+    --tile-text: #ffe70b;
+    --text: #1a1a1a;
+    --muted: #595959;
+    --line: #e6e3d8;
+    --card: #faf9f4;
+    --code-bg: #0d0d0d;
+    --code-text: #e8e8e8;
+    --code-border: transparent;
+    --chip-bg: #faf9f4;
+    --th-border: #000;
+    --badge-label: #000;
+    --badge-body: #fff;
+    --badge-body-text: #000;
+    --nav-bg: rgba(255,255,255,.94);
+  }
+  html[data-theme="dark"] {
+    --bg: #101010;
+    --band: #000;
+    --band-text: #ffe70b;
+    --tile-bg: #ffe70b;
+    --tile-text: #000;
+    --text: #e6e6e6;
+    --muted: #9a9a9a;
+    --line: #2b2b2b;
+    --card: #191919;
+    --code-bg: #0a0a0a;
+    --code-text: #e8e8e8;
+    --code-border: #232323;
+    --chip-bg: #191919;
+    --th-border: #ffe70b;
+    --badge-label: #262626;
+    --badge-body: #111;
+    --badge-body-text: #eee;
+    --nav-bg: rgba(16,16,16,.94);
+  }
+  @media (prefers-color-scheme: dark) {
+    html:not([data-theme="light"]) {
+      --bg: #101010;
+      --band: #000;
+      --band-text: #ffe70b;
+      --tile-bg: #ffe70b;
+      --tile-text: #000;
+      --text: #e6e6e6;
+      --muted: #9a9a9a;
+      --line: #2b2b2b;
+      --card: #191919;
+      --code-bg: #0a0a0a;
+      --code-text: #e8e8e8;
+      --code-border: #232323;
+      --chip-bg: #191919;
+      --th-border: #ffe70b;
+      --badge-label: #262626;
+      --badge-body: #111;
+      --badge-body-text: #eee;
+      --nav-bg: rgba(16,16,16,.94);
+    }
   }
   * { box-sizing: border-box; }
+  html { background: var(--bg); scroll-padding-top: 64px; }
+  html.smooth { scroll-behavior: smooth; }
+  html.theming, html.theming *, html.theming *:before, html.theming *:after {
+    transition: background-color .25s ease, color .25s ease, border-color .25s ease, fill .25s ease, stroke .25s ease !important;
+  }
   body {
     margin: 0;
-    background: var(--bg);
+    font-family: "Source Sans 3", Arial, Helvetica, sans-serif;
+    font-size: 17px;
+    line-height: 1.65;
     color: var(--text);
-    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--bg);
   }
-  main { max-width: 880px; margin: 0 auto; padding: 0 24px 96px; }
-  header { padding: 88px 0 32px; }
-  h1 { font-size: 44px; margin: 0 0 12px; letter-spacing: -1px; }
-  .tagline { font-size: 20px; color: var(--muted); margin: 0; max-width: 640px; }
-  .links { margin: 28px 0 0; display: flex; gap: 12px; flex-wrap: wrap; }
-  .links a {
-    display: inline-block; padding: 10px 18px; border-radius: 8px;
-    text-decoration: none; font-weight: 500; font-size: 15px;
+  ::selection { background: #000; color: var(--yellow); }
+
+  .band { background: var(--band); color: var(--band-text); }
+  .band-inner { max-width: 760px; margin: 0 auto; padding: 40px 24px 48px; }
+  .band-top { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: flex-start; }
+  .logo {
+    background: var(--tile-bg); color: var(--tile-text); font-weight: 700;
+    font-size: 30px; line-height: 1; padding: 14px 16px 12px;
+    letter-spacing: -1px; display: inline-block;
   }
-  .links a.primary { background: var(--accent); color: #0b1017; }
-  .links a.ghost { border: 1px solid var(--border); color: var(--text); }
-  h2 { font-size: 22px; margin: 56px 0 12px; letter-spacing: -0.3px; }
-  p { color: var(--text); }
-  p.dim { color: var(--muted); }
+  .badges { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .badge { display: inline-flex; font-weight: 600; font-size: 15px; text-decoration: none; line-height: 1; }
+  .badge b { background: var(--badge-label); color: #fff; padding: 9px 10px; font-weight: 600; }
+  .badge i { background: var(--badge-body); color: var(--badge-body-text); padding: 9px 12px; font-style: normal; }
+  .badge.blue b { background: #0070f0; }
+  .badge:hover { filter: brightness(.92); }
+
+  h1.tagline {
+    font-size: 23px; line-height: 1.5; font-weight: 400;
+    margin: 36px 0 0; max-width: 640px; letter-spacing: 0;
+  }
+  h1.tagline strong { font-weight: 700; }
+  .install {
+    display: block; position: relative; margin: 30px 0 0; background: #0d0d0d; color: #fff;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 15px; padding: 14px 18px; max-width: 420px;
+  }
+  .install:hover .copy { opacity: 1; }
+  .install { cursor: pointer; }
+  .install span { color: var(--yellow); user-select: none; }
+
+  nav.top {
+    position: sticky; top: 0; z-index: 10;
+    background: var(--nav-bg); backdrop-filter: blur(6px);
+    border-bottom: 2px solid var(--yellow);
+  }
+  nav.top .nav-inner {
+    max-width: 760px; margin: 0 auto; padding: 9px 24px;
+    display: flex; flex-wrap: wrap; gap: 2px 16px; align-items: center; font-size: 14px;
+  }
+  .nav-links { display: flex; flex-wrap: wrap; gap: 2px 16px; align-items: center; min-width: 0; }
+  @media (max-width: 700px) {
+    nav.top .nav-inner { flex-wrap: nowrap; gap: 8px; }
+    .nav-links { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+    .nav-links::-webkit-scrollbar { display: none; }
+    nav.top a { white-space: nowrap; }
+    #theme-toggle { flex: 0 0 auto; }
+  }
+  .h-anchor {
+    margin-left: 10px; font-weight: 600; text-decoration: none;
+    color: var(--muted); opacity: 0; transition: opacity .12s;
+  }
+  h2:hover .h-anchor { opacity: 1; }
+  nav.top a {
+    color: var(--text); text-decoration: none; font-weight: 600;
+    padding: 5px 9px; margin: 0 -3px; border-radius: 3px;
+  }
+  nav.top a:hover, nav.top a.current { background: var(--yellow); color: #000; }
+  #theme-toggle {
+    margin-left: auto; cursor: pointer; border: 0; background: none;
+    color: var(--text); padding: 6px 8px; border-radius: 3px;
+    display: inline-flex; align-items: center;
+  }
+  #theme-toggle .sun { display: none; }
+  html[data-theme="dark"] #theme-toggle .sun { display: block; }
+  html[data-theme="dark"] #theme-toggle .moon { display: none; }
+  #theme-toggle:hover { background: var(--yellow); color: #000; }
+  #theme-toggle:focus { outline: none; }
+  #theme-toggle:focus-visible { outline: 2px solid var(--yellow); outline-offset: 2px; }
+
+  main { max-width: 760px; margin: 0 auto; padding: 16px 24px 40px; }
+  h2 {
+    font-size: 27px; font-weight: 700; letter-spacing: -0.4px;
+    margin: 64px 0 14px; padding-top: 10px; position: relative;
+  }
+  h2:before {
+    content: ""; position: absolute; top: 0; left: 0;
+    width: 44px; height: 5px; background: var(--yellow);
+  }
+  h3 { font-size: 19px; font-weight: 700; margin: 34px 0 8px; }
+  p { margin: 12px 0; }
+  .dim { color: var(--muted); }
+  .lead { font-size: 18px; margin-top: 28px; }
+
+  .pre-wrap { position: relative; margin: 18px 0; }
+  .tabs { display: flex; gap: 4px; flex-wrap: wrap; margin: 18px 0 0; }
+  .tab {
+    cursor: pointer; border: 1px solid var(--line); border-bottom: none;
+    background: var(--card); color: var(--text);
+    font: 600 14px/1.4 "Source Sans 3", sans-serif; padding: 7px 14px;
+    transition: background .12s, border-color .12s;
+  }
+  .tab.active { background: var(--yellow); color: #000; border-color: var(--yellow); }
+  .tab:hover:not(.active) { border-color: var(--yellow); }
+  .tab:focus { outline: none; }
+  .tab:focus-visible { outline: 2px solid var(--yellow); outline-offset: 2px; }
+  .builder { margin: 20px 0 0; border: 1px solid var(--line); background: var(--card); padding: 14px 16px; display: grid; gap: 10px; }
+  .brow { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .blabel { flex: 0 0 88px; font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+  .bopt {
+    cursor: pointer; border: 1px solid var(--line); background: var(--bg);
+    color: var(--text); font: 600 14px/1.4 "Source Sans 3", sans-serif;
+    padding: 6px 13px; border-radius: 999px; transition: background .12s, border-color .12s, opacity .12s;
+  }
+  .bopt.active { background: var(--yellow); color: #000; border-color: var(--yellow); }
+  .bopt:hover:not(.active):not(.disabled) { border-color: var(--yellow); }
+  .bopt.disabled { opacity: .35; cursor: not-allowed; }
+  .bopt:focus { outline: none; }
+  .bopt:focus-visible { outline: 2px solid var(--yellow); outline-offset: 2px; }
+  .pane-note { margin: 0; padding: 12px 16px; background: var(--card); border: 1px solid var(--line); border-bottom: none; font-size: 15px; }
+  .tabpane { display: none; }
+  .tabpane.active { display: block; margin-top: 0; }
   pre {
-    background: var(--code-bg); border: 1px solid var(--border); border-radius: 10px;
-    padding: 16px 18px; overflow-x: auto; font-size: 14px; line-height: 1.55;
+    background: var(--code-bg); color: var(--code-text);
+    border: 1px solid var(--code-border);
+    padding: 18px 20px; overflow-x: auto;
+    font-size: 14px; line-height: 1.6; margin: 0;
   }
-  code { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
-  p code, li code {
-    background: var(--code-bg); border: 1px solid var(--border);
-    border-radius: 5px; padding: 1px 6px; font-size: 14px;
+  .copy {
+    position: absolute; top: 6px; right: 6px;
+    background: none; border: 0; color: #8a8a8a;
+    padding: 8px; line-height: 0; cursor: pointer;
+    opacity: 0; transition: opacity .15s, color .15s;
   }
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-top: 20px; }
-  .card {
-    background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px;
+  .copy:hover { color: #fff; }
+  .copy.ok, .copy.ok:hover { color: #7ec97e; }
+  .copy:focus { outline: none; }
+  .copy:focus-visible { outline: 2px solid var(--yellow); outline-offset: 0; opacity: 1; }
+  @media (hover: none) { .copy { opacity: .55; } }
+  .pre-wrap pre, .install { padding-right: 44px; }
+  .pre-wrap:hover .copy { opacity: 1; }
+  .copy:hover { color: var(--yellow); border-color: var(--yellow); }
+  code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  p code, li code, td code {
+    background: var(--chip-bg); border: 1px solid var(--line);
+    padding: 1px 6px; font-size: 14px; border-radius: 3px;
   }
-  .card h3 { margin: 0 0 6px; font-size: 16px; }
-  .card p { margin: 0; font-size: 14px; color: var(--muted); }
-  ul { padding-left: 20px; }
-  li { margin: 4px 0; }
-  footer { margin-top: 72px; padding-top: 24px; border-top: 1px solid var(--border); color: var(--muted); font-size: 14px; }
-  a { color: var(--accent); }
-  .kw { color: #c792ea; } .fn { color: #82aaff; } .str { color: #c3e88d; } .cm { color: #5c6773; }
+  .kw { color: var(--yellow); } .fn { color: #7cc7ff; } .str { color: #b5e08a; } .cm { color: #7a7a7a; }
+
+  .steps { margin: 22px 0; display: grid; gap: 12px; }
+  .step { display: flex; gap: 18px; background: var(--card); border: 1px solid var(--line); padding: 18px 20px; transition: border-color .15s; }
+  .step:hover { border-color: var(--yellow); }
+  .step .num {
+    flex: 0 0 52px; height: 52px; background: var(--yellow); color: #000;
+    font-size: 30px; font-weight: 700; display: flex;
+    align-items: flex-end; justify-content: flex-end; padding: 0 7px 2px 0;
+  }
+  .step p { margin: 0; font-size: 15.5px; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 15px; margin: 18px 0; }
+  th {
+    text-align: left; padding: 9px 12px; font-weight: 700;
+    border-bottom: 3px solid var(--th-border); background: var(--card);
+  }
+  td { padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:hover td { background: var(--card); }
+
+  ul { padding-left: 22px; margin: 10px 0; }
+  li { margin: 5px 0; }
+  .cols { columns: 2; column-gap: 40px; font-size: 15.5px; }
+  @media (max-width: 600px) { .cols { columns: 1; } }
+  li::marker { color: #b09e00; }
+  html[data-theme="dark"] li::marker { color: var(--yellow); }
+
+  a {
+    color: var(--text); font-weight: 600;
+    text-decoration-color: var(--yellow); text-decoration-thickness: 2px; text-underline-offset: 3px;
+    padding: 1px 3px; margin: 0 -3px; border-radius: 3px;
+  }
+  a:hover { background: var(--yellow); color: #000; text-decoration: none; }
+
+
+
+  * { -webkit-tap-highlight-color: transparent; }
+  .table-scroll { overflow-x: auto; }
+  @media (max-width: 640px) {
+    body { font-size: 16px; }
+    .band-inner { padding: 28px 18px 36px; }
+    .logo { font-size: 24px; padding: 12px 14px 10px; }
+    h1.tagline { font-size: 19px; margin-top: 28px; }
+    .install { font-size: 13.5px; padding: 12px 44px 12px 14px; }
+    main { padding: 8px 18px 32px; }
+    h2 { font-size: 23px; margin: 48px 0 12px; }
+    h3 { font-size: 17px; }
+    pre { font-size: 12.5px; padding: 14px 40px 14px 14px; }
+    .step { gap: 14px; padding: 14px 16px; }
+    .step .num { flex: 0 0 40px; height: 40px; font-size: 24px; }
+    .blabel { flex-basis: 100%; }
+    .bopt { padding: 6px 12px; font-size: 13.5px; }
+    table { display: block; overflow-x: auto; white-space: nowrap; }
+    table td, table th { white-space: normal; min-width: 130px; }
+    .footer-band footer { padding: 16px 18px 32px; }
+  }
+  .pg { border: 1px solid var(--line); border-top: none; background: var(--card); padding: 18px; display: grid; gap: 14px; }
+  .pg-stage {
+    position: relative; width: min(100%, 320px); margin: 0 auto;
+    background: #fff;
+    background-image: linear-gradient(45deg, #f1f1f1 25%, transparent 25%, transparent 75%, #f1f1f1 75%),
+      linear-gradient(45deg, #f1f1f1 25%, transparent 25%, transparent 75%, #f1f1f1 75%);
+    background-size: 24px 24px; background-position: 0 0, 12px 12px;
+    border: 1px solid var(--line);
+  }
+  .pg-stage canvas, .pg-stage .pg-svg { display: block; width: 100%; }
+  .pg-stage .pg-svg svg { display: block; width: 100%; height: auto; }
+  .pg-stage.dragging:after {
+    content: "Drop it"; position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(255, 231, 11, .92); color: #000;
+    font-weight: 700; font-size: 19px;
+  }
+  .pg-controls { display: flex; align-items: center; gap: 12px; }
+  .pg-btn {
+    flex: 0 0 auto; cursor: pointer; border: 0; background: var(--yellow); color: #000;
+    width: 38px; height: 38px; display: inline-flex; align-items: center; justify-content: center;
+  }
+  .pg-btn:hover { filter: brightness(.94); }
+  .pg-btn:focus { outline: none; }
+  .pg-btn:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+  .pg-controls input[type="range"] { flex: 1; accent-color: #b09e00; min-width: 0; }
+  html[data-theme="dark"] .pg-controls input[type="range"] { accent-color: var(--yellow); }
+  .pg-num { flex: 0 0 auto; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 13px; color: var(--muted); min-width: 62px; text-align: right; }
+  .pg-note { margin: 0; font-size: 14px; }
+  @media (max-width: 640px) { .pg { padding: 14px; } }
+
+  .live {
+    border: 1px solid var(--line); border-top: none; background: var(--card);
+    padding: 14px 16px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+    font-size: 15px;
+  }
+  .live-tag {
+    background: var(--yellow); color: #000; font-size: 11px; font-weight: 700;
+    letter-spacing: 1.5px; text-transform: uppercase; padding: 3px 8px 2px;
+  }
+  .live img { display: block; width: 100%; max-width: 280px; border: 1px solid var(--line); background: #fff; }
+  .live .dim { font-size: 14px; }
+  .live code.dim { background: none; border: 0; padding: 0; }
+  .hover-demo {
+    display: inline-flex; align-items: center; gap: 12px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--bg); color: var(--text);
+    font: 600 15px/1.4 "Source Sans 3", sans-serif; padding: 8px 18px 8px 8px;
+  }
+  .hover-demo:hover { border-color: var(--yellow); }
+  .hover-demo canvas { display: block; width: 44px; height: 44px; background: #fff; border: 1px solid var(--line); }
+  .scroll-box {
+    width: 190px; height: 150px; overflow-y: auto; border: 1px solid var(--line);
+    background: var(--bg); flex: 0 0 auto;
+  }
+  .scroll-inner { padding: 10px 14px; }
+  .scroll-inner p { font-size: 13.5px; color: var(--muted); margin: 10px 0 26px; }
+  #scroll-canvas { display: block; width: 120px; height: 120px; background: #fff; border: 1px solid var(--line); }
+
+  .api-sig {
+    background: var(--code-bg); color: var(--code-text); border: 1px solid var(--code-border);
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 14px; padding: 10px 14px; margin: 26px 0 10px; overflow-x: auto; white-space: nowrap;
+  }
+  .api-sig .ret { color: #8a8a8a; }
+  .api-sig .fn { color: #7cc7ff; }
+
+  .footer-band { border-top: 4px solid var(--yellow); margin-top: 72px; }
+  footer {
+    max-width: 760px; margin: 0 auto; padding: 28px 24px 44px;
+    display: flex; flex-wrap: wrap; gap: 20px 40px; justify-content: space-between;
+    align-items: flex-start; font-size: 14px; color: var(--muted);
+  }
+  .f-logo {
+    background: var(--tile-bg); color: var(--tile-text); font-weight: 700;
+    font-size: 17px; line-height: 1; padding: 9px 11px 8px;
+    letter-spacing: -0.5px; display: inline-block;
+  }
+  .f-note { margin: 12px 0 0; max-width: 380px; }
+  .f-links { display: flex; flex-direction: column; gap: 6px; padding-top: 3px; }
+  .f-links a { align-self: flex-start; }
 </style>
 </head>
 <body>
-<main>
-  <header>
-    <h1>lottie.js</h1>
-    <p class="tagline">A fast, dependency-free Lottie engine for every JavaScript runtime
-    and environment. No DOM, no eval, no native code.</p>
-    <div class="links">
-      <a class="primary" href="https://github.com/sanyok12345/lottie.js">GitHub</a>
-      <a class="ghost" href="https://www.npmjs.com/package/lottie.js">npm</a>
+
+<div class="band">
+  <div class="band-inner">
+    <div class="band-top">
+      <div class="logo">lottie.js</div>
+      <div class="badges">
+        <a class="badge" href="https://github.com/sanyok12345/lottie.js" rel="noopener"><b>git</b><i>GitHub</i></a>
+        <a class="badge blue" href="https://www.npmjs.com/package/lottie.js" rel="noopener"><b>npm</b><i>lottie.js</i></a>
+      </div>
     </div>
-  </header>
+    <h1 class="tagline">A fast, <strong>dependency-free</strong> Lottie engine
+    for every JavaScript runtime and environment. No DOM, no native code, and
+    no <strong>eval</strong>, so it runs under the strictest Content Security
+    Policy.</h1>
+    <span class="install"><span>$</span> npm install lottie.js</span>
+  </div>
+</div>
 
-  <h2>Install</h2>
-  <pre><code>npm install lottie.js</code></pre>
+<nav class="top" aria-label="Sections">
+  <div class="nav-inner">
+    <div class="nav-links">
+    <a href="#how-it-works">How it works</a>
+    <a href="#quick-start">Quick start</a>
+    <a href="#surfaces">Surfaces</a>
+    <a href="#playback">Playback</a>
+    <a href="#recipes">Recipes</a>
+    <a href="#cookbook">Cookbook</a>
+    <a href="#api">API</a>
+    <a href="#features">Features</a>
+    </div>
+    <button id="theme-toggle" aria-label="Switch color theme">
+      <svg class="moon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      <svg class="sun" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+    </button>
+  </div>
+</nav>
 
-  <h2>Quick start</h2>
-  <pre><code><span class="kw">import</span> { parse, CanvasSurface } <span class="kw">from</span> <span class="str">'lottie.js'</span>;
+<main>
+  <p class="lead">lottie.js parses a <strong>Lottie</strong> (Bodymovin,
+  After Effects export) document into a renderer-agnostic scene and draws
+  that scene to <strong>Canvas2D</strong>, <strong>SVG</strong>, or
+  <strong>raw pixels</strong>. It has no runtime dependencies and makes no
+  assumption about its host: no <code>node:</code> modules, no DOM, no I/O in
+  the core. It runs in the browser, on a server with Node.js, in React
+  Native, Deno, Bun, and Web Workers, and it renders animations to PNG on a
+  server without a headless browser.</p>
+
+  <section id="how-it-works">
+    <h2>How it works</h2>
+    <p>Three stages, one pipeline:</p>
+    <div class="steps">
+      <div class="step">
+        <div class="num">1</div>
+        <p><strong>Parse.</strong> <code>parse(json)</code> returns an
+        immutable <code>Animation</code> with its metadata. Synchronous, no
+        I/O; <code>load(src)</code> fetches URLs.</p>
+      </div>
+      <div class="step">
+        <div class="num">2</div>
+        <p><strong>Evaluate.</strong> <code>anim.sceneAt(frame)</code> turns
+        a frame into a scene: plain draw operations, independent of the
+        environment.</p>
+      </div>
+      <div class="step">
+        <div class="num">3</div>
+        <p><strong>Render.</strong> A surface draws the scene: native
+        Canvas2D calls, an SVG string, or RGBA pixels and PNG in pure
+        JavaScript.</p>
+      </div>
+    </div>
+    <p><code>Playback</code> drives time on top. Nothing above the surface
+    touches the DOM, so the same code runs in the browser, on a server, or in
+    a worker.</p>
+  </section>
+
+  <section id="quick-start">
+    <h2>Quick start</h2>
+    <p>Pick a runtime, an install method, and a framework; the snippets
+    adjust. ESM and CommonJS are both supported.</p>
+    <div class="builder">
+      <div class="brow"><span class="blabel">Runtime</span>
+        <button class="bopt active" data-k="r" data-v="browser">Browser</button>
+        <button class="bopt" data-k="r" data-v="node">Node.js</button>
+        <button class="bopt" data-k="r" data-v="deno">Deno</button>
+        <button class="bopt" data-k="r" data-v="bun">Bun</button>
+        <button class="bopt" data-k="r" data-v="worker">Web Worker</button>
+        <button class="bopt" data-k="r" data-v="edge">Edge</button>
+      </div>
+      <div class="brow"><span class="blabel">Install</span>
+        <button class="bopt active" data-k="p" data-v="npm">npm</button>
+        <button class="bopt" data-k="p" data-v="pnpm">pnpm</button>
+        <button class="bopt" data-k="p" data-v="yarn">yarn</button>
+        <button class="bopt" data-k="p" data-v="bun">bun</button>
+        <button class="bopt" data-k="p" data-v="cdn">CDN</button>
+      </div>
+      <div class="brow"><span class="blabel">Framework</span>
+        <button class="bopt active" data-k="f" data-v="vanilla">Vanilla</button>
+        <button class="bopt" data-k="f" data-v="react">React</button>
+        <button class="bopt" data-k="f" data-v="vue">Vue</button>
+        <button class="bopt" data-k="f" data-v="svelte">Svelte</button>
+      </div>
+    </div>
+    <div class="pre-wrap"><pre id="out-install"><code></code></pre></div>
+    <div class="pre-wrap"><pre id="out-code"><code></code></pre></div>
+  </section>
+
+  <section id="surfaces">
+    <h2>Surfaces</h2>
+    <p>A surface is a drawing target of one kind. It holds its own state, so
+    one <code>Animation</code> can feed several surfaces at once. Every
+    surface has <code>render(anim, frame?, options?)</code> and
+    <code>dispose()</code>.</p>
+    <table>
+      <tr><th>Surface</th><th>Output</th><th>Use for</th></tr>
+      <tr><td><code>CanvasSurface</code></td><td>Canvas2D draw calls</td>
+        <td>The fast path for playback in the browser. Respects the context
+        transform, so you can tile it.</td></tr>
+      <tr><td><code>SvgSurface</code></td><td>SVG string</td>
+        <td>Static output and <code>image/svg+xml</code> responses.
+        <code>idPrefix</code> keeps ids unique across several SVGs on a
+        page.</td></tr>
+      <tr><td><code>ImageSurface</code></td><td>RGBA pixels, PNG bytes</td>
+        <td>Server-side rendering with no native code and no browser, and
+        workers.</td></tr>
+    </table>
+    <p class="dim">Render options are <code>width</code>,
+    <code>height</code>, <code>dpr</code>, <code>clear</code> (Canvas),
+    <code>idPrefix</code> (SVG), and <code>images</code> (ImageSurface,
+    decoded pixels for image assets keyed by asset id). Dimensions default to
+    the composition size.</p>
+  </section>
+
+  <section id="playback">
+    <h2>Playback</h2>
+    <p><code>Playback</code> owns time, looping, speed, and direction, and
+    emits events. It has no built-in clock, so it runs anywhere:
+    <code>tick(dtMs)</code> is the primitive, and <code>start()</code> is an
+    optional <code>requestAnimationFrame</code> loop for the browser.</p>
+<div class="pre-wrap"><pre><code><span class="kw">import</span> { Playback } <span class="kw">from</span> <span class="str spec">'lottie.js'</span>;
+
+<span class="kw">const</span> player = <span class="kw">new</span> <span class="fn">Playback</span>({
+  animation: anim,
+  surface,
+  loop: <span class="kw">true</span>,
+  speed: 1,
+  mode: <span class="str">'forward'</span>,          <span class="cm">// 'forward' | 'reverse' | 'bounce'</span>
+  render: { width: 512, height: 512 },
+});
+
+player.<span class="fn">play</span>();
+player.<span class="fn">pause</span>();
+player.<span class="fn">seek</span>(30);
+player.<span class="fn">seekTime</span>(1.5);
+
+<span class="kw">const</span> off = player.<span class="fn">on</span>(<span class="str">'frame'</span>, ({ frame, progress }) => {});
+player.<span class="fn">on</span>(<span class="str">'loop'</span>, () => {});
+player.<span class="fn">on</span>(<span class="str">'complete'</span>, () => {});
+<span class="kw">await</span> player.finished;
+
+player.<span class="fn">destroy</span>();           <span class="cm">// stops, unsubscribes, disposes the surface</span></code></pre></div>
+    <p>Drive it by hand where there is no animation frame callback:</p>
+<div class="pre-wrap"><pre><code>player.<span class="fn">tick</span>(16);            <span class="cm">// advance ~16 ms</span></code></pre></div>
+    <p>Options also include <code>segment</code> to restrict the frame range,
+    <code>autoplay</code>, and <code>respectReducedMotion</code> for users
+    who prefer reduced motion. Events: <code>frame</code>, <code>loop</code>,
+    <code>complete</code>, <code>error</code>.</p>
+  </section>
+
+  <section id="recipes">
+    <h2>Recipes</h2>
+    <h3>Next.js route handler</h3>
+    <p>Serve rendered frames from an API route:</p>
+<div class="pre-wrap"><pre><code><span class="cm">// app/api/frame/route.js</span>
+<span class="kw">import</span> { parse, ImageSurface } <span class="kw">from</span> <span class="str">'lottie.js'</span>;
+<span class="kw">import</span> animation <span class="kw">from</span> <span class="str">'./animation.json'</span>;
+
+<span class="kw">export</span> <span class="kw">async function</span> <span class="fn">GET</span>() {
+  <span class="kw">const</span> png = <span class="kw">await</span> <span class="kw">new</span> <span class="fn">ImageSurface</span>(512, 512).<span class="fn">png</span>(<span class="fn">parse</span>(animation), 30);
+  <span class="kw">return new</span> <span class="fn">Response</span>(png, { headers: { <span class="str">'Content-Type'</span>: <span class="str">'image/png'</span> } });
+}</code></pre></div>
+    <h3>Custom renderers</h3>
+    <p>Where there is no Canvas2D or DOM (React Native with Skia, WebGL, a
+    native backend), read the scene and issue your own draw calls:</p>
+<div class="pre-wrap"><pre><code><span class="kw">const</span> anim = <span class="fn">parse</span>(data);
+<span class="kw">for</span> (<span class="kw">const</span> op <span class="kw">of</span> anim.<span class="fn">sceneAt</span>(frame).ops) {
+  <span class="cm">// op.kind   : 'shape' | 'image'</span>
+  <span class="cm">// op.matrix : [a, b, c, d, tx, ty]</span>
+  <span class="cm">// op.paths  : cubic-bezier contours</span>
+  <span class="cm">// op.fills  : solid colors and gradients</span>
+  <span class="cm">// op.strokes: color or gradient, width, cap, join, dashes</span>
+  <span class="cm">// op.clips  : optional mask/matte stages (intersect or subtract)</span>
+  <span class="cm">// op.blend  : optional Lottie blend mode</span>
+}</code></pre></div>
+  </section>
+
+  <section id="cookbook">
+    <h2>Cookbook</h2>
+    <p>Real tasks, ready to paste. Each one normally pulls in a headless
+    browser, a native module, or a heavyweight player; with lottie.js it is
+    a few lines of plain JavaScript. And none of it is theoretical: every
+    demo below runs live on this page, importing <code>lottie.js</code>
+    straight from jsDelivr, exactly like the CDN snippet in
+    <a href="#quick-start">Quick start</a>.</p>
+    <div class="tabgroup" id="cb-group">
+      <div class="tabs" role="tablist" aria-label="Cookbook recipes">
+        <button class="tab active" data-t="pg">Playground</button>
+        <button class="tab" data-t="og">OG images</button>
+        <button class="tab" data-t="tgs">.tgs → PNG</button>
+        <button class="tab" data-t="scroll">Scroll</button>
+        <button class="tab" data-t="hover">Hover play</button>
+        <button class="tab" data-t="test">Testing</button>
+      </div>
+      <div class="tabpane active" data-t="pg">
+        <p class="pane-note"><strong>The engine, live.</strong> This stage is
+        lottie.js rendering a Lottie document in your browser right now:
+        play it, scrub it, switch the surface, or drop your own
+        <code>.json</code> / Telegram <code>.tgs</code> onto it.</p>
+        <div class="pg">
+          <div class="pg-stage" id="pg-stage">
+            <canvas id="pg-canvas" width="512" height="512"></canvas>
+            <div class="pg-svg" id="pg-svg" hidden></div>
+          </div>
+          <div class="pg-controls">
+            <button class="pg-btn" id="pg-play" aria-label="Pause">
+              <svg class="i-pause" viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><rect x="5" y="4" width="5" height="16"/><rect x="14" y="4" width="5" height="16"/></svg>
+              <svg class="i-play" viewBox="0 0 24 24" width="15" height="15" fill="currentColor" style="display:none"><path d="M6 3.5 20 12 6 20.5z"/></svg>
+            </button>
+            <input type="range" id="pg-scrub" min="0" max="89" value="0" step="1" aria-label="Frame">
+            <span class="pg-num" id="pg-frame">0 / 90</span>
+          </div>
+          <div class="brow">
+            <span class="blabel">Surface</span>
+            <button class="bopt active" data-surface="canvas">Canvas2D</button>
+            <button class="bopt" data-surface="svg">SVG</button>
+            <button class="bopt" id="pg-open">Open a file…</button>
+          </div>
+          <p class="dim pg-note" id="pg-note">No player build, no plugins:
+          one ES module doing the drawing.</p>
+          <input type="file" id="pg-file" accept=".json,.tgs,application/json" hidden>
+        </div>
+      </div>
+      <div class="pre-wrap tabpane" data-t="og">
+        <p class="pane-note"><strong>Open Graph previews in Next.js.</strong> Serve a rendered frame as the social preview image.
+        <span class="dim">The usual answer is Puppeteer on a serverless
+        function; <code>ImageSurface</code> is plain JavaScript, so the whole
+        route deploys anywhere with no binaries.</span></p>
+        <div class="live">
+          <span class="live-tag">live</span>
+          <button class="bopt" id="og-run">Render the PNG here</button>
+          <span class="dim" id="og-meta">Same code, run by your browser at half size.</span>
+          <img id="og-img" alt="Rendered Open Graph frame" hidden>
+        </div>
+<pre><code><span class="cm">// app/og/route.js</span>
+<span class="kw">import</span> { parse, ImageSurface } <span class="kw">from</span> <span class="str">'lottie.js'</span>;
+<span class="kw">import</span> animation <span class="kw">from</span> <span class="str">'./hero.json'</span>;
+
+<span class="kw">export</span> <span class="kw">async function</span> <span class="fn">GET</span>() {
+  <span class="kw">const</span> png = <span class="kw">await</span> <span class="kw">new</span> <span class="fn">ImageSurface</span>(1200, 630).<span class="fn">png</span>(<span class="fn">parse</span>(animation), 45);
+  <span class="kw">return new</span> <span class="fn">Response</span>(png, {
+    headers: {
+      <span class="str">'Content-Type'</span>: <span class="str">'image/png'</span>,
+      <span class="str">'Cache-Control'</span>: <span class="str">'public, max-age=86400'</span>,
+    },
+  });
+}</code></pre>
+      </div>
+      <div class="pre-wrap tabpane" data-t="tgs">
+        <p class="pane-note"><strong>Telegram .tgs sticker to a static image.</strong> A .tgs file is gzipped Lottie JSON. Decompress it with the built-in
+        <code>DecompressionStream</code>, then render any frame.
+        <span class="dim">Every modern runtime ships the decompressor, so a
+        sticker pipeline needs zero extra dependencies.</span></p>
+        <div class="live">
+          <span class="live-tag">live</span>
+          <button class="bopt" id="tgs-open">Choose a .tgs file…</button>
+          <span class="dim" id="tgs-meta">Any Telegram sticker works.</span>
+          <img id="tgs-img" alt="Sticker rendered to PNG" hidden>
+          <input type="file" id="tgs-file" accept=".tgs" hidden>
+        </div>
+<pre><code><span class="kw">import</span> { parse, ImageSurface } <span class="kw">from</span> <span class="str">'lottie.js'</span>;
+
+<span class="kw">const</span> res = <span class="kw">await</span> <span class="fn">fetch</span>(<span class="str">'sticker.tgs'</span>);
+<span class="kw">const</span> json = <span class="kw">await</span> <span class="kw">new</span> <span class="fn">Response</span>(
+  res.body.<span class="fn">pipeThrough</span>(<span class="kw">new</span> <span class="fn">DecompressionStream</span>(<span class="str">'gzip'</span>))
+).<span class="fn">text</span>();
 
 <span class="kw">const</span> anim = <span class="fn">parse</span>(json);
-<span class="kw">const</span> surface = <span class="kw">new</span> <span class="fn">CanvasSurface</span>(canvas.<span class="fn">getContext</span>(<span class="str">'2d'</span>));
-surface.<span class="fn">render</span>(anim, <span class="fn">30</span>);</code></pre>
+<span class="kw">const</span> png = <span class="kw">await</span> <span class="kw">new</span> <span class="fn">ImageSurface</span>(512, 512).<span class="fn">png</span>(anim, 0);</code></pre>
+      </div>
+      <div class="pre-wrap tabpane" data-t="scroll">
+        <p class="pane-note"><strong>Scroll-driven animation.</strong> Map scroll progress to a frame with
+        <code>frameAtProgress</code>.
+        <span class="dim">No timeline library and no playback loop: one
+        render call per scroll event, driven by a number you already
+        have.</span></p>
+        <div class="live">
+          <span class="live-tag">live</span>
+          <div class="scroll-box" id="scroll-box">
+            <div class="scroll-inner">
+              <p>Scroll me.</p><p>The box maps its scroll position to a
+              frame with <code>frameAtProgress</code>, exactly like the
+              snippet below does for the page.</p><p>Keep going…</p>
+              <p>…and back up rewinds it.</p><p>No timers, no playback
+              loop: one render call per scroll event.</p><p>That's the
+              whole recipe.</p>
+            </div>
+          </div>
+          <canvas id="scroll-canvas" width="240" height="240"></canvas>
+        </div>
+<pre><code><span class="kw">const</span> surface = <span class="kw">new</span> <span class="fn">CanvasSurface</span>(canvas.<span class="fn">getContext</span>(<span class="str">'2d'</span>));
 
-  <p>On a server, render straight to PNG bytes without a headless browser:</p>
-  <pre><code><span class="kw">import</span> { parse, ImageSurface } <span class="kw">from</span> <span class="str">'lottie.js'</span>;
+<span class="fn">addEventListener</span>(<span class="str">'scroll'</span>, () => {
+  <span class="kw">const</span> t = scrollY / (document.body.scrollHeight - innerHeight);
+  surface.<span class="fn">render</span>(anim, anim.<span class="fn">frameAtProgress</span>(t));
+}, { passive: <span class="kw">true</span> });</code></pre>
+      </div>
+      <div class="pre-wrap tabpane" data-t="hover">
+        <p class="pane-note"><strong>Play on hover.</strong> Animated icons that run only while the pointer is over them.
+        <span class="dim">With <code>autoplay: false</code> nothing renders
+        until the pointer arrives, so a page full of icons stays
+        cheap.</span></p>
+        <div class="live">
+          <span class="live-tag">live</span>
+          <button class="hover-demo" id="hover-btn">
+            <canvas id="hover-canvas" width="192" height="192"></canvas>
+            <span>Hover me</span>
+          </button>
+          <span class="dim">Plays while the pointer is over it, pauses the
+          moment it leaves.</span>
+        </div>
+<pre><code><span class="kw">const</span> player = <span class="kw">new</span> <span class="fn">Playback</span>({ animation: anim, surface, loop: <span class="kw">true</span>, autoplay: <span class="kw">false</span> });
 
-<span class="kw">const</span> png = <span class="kw">await</span> <span class="kw">new</span> <span class="fn">ImageSurface</span>(<span class="fn">512</span>, <span class="fn">512</span>).<span class="fn">png</span>(<span class="fn">parse</span>(json), <span class="fn">0</span>);</code></pre>
+button.<span class="fn">addEventListener</span>(<span class="str">'mouseenter'</span>, () => player.<span class="fn">play</span>());
+button.<span class="fn">addEventListener</span>(<span class="str">'mouseleave'</span>, () => player.<span class="fn">pause</span>());</code></pre>
+      </div>
+      <div class="pre-wrap tabpane" data-t="test">
+        <p class="pane-note"><strong>Visual regression tests.</strong> <code>ImageSurface</code> output is deterministic, byte-identical on
+        every platform, so animation snapshots do not flake.
+        <span class="dim">The raster is pure JS: the same bytes on macOS,
+        Linux, and CI, with no browser in the test suite.</span></p>
+        <div class="live">
+          <span class="live-tag">live</span>
+          <button class="bopt" id="test-run">Hash frame 30, twice</button>
+          <code class="dim" id="test-out"></code>
+        </div>
+<pre><code><span class="kw">import</span> { createHash } <span class="kw">from</span> <span class="str">'node:crypto'</span>;
 
-  <h2>Why lottie.js</h2>
-  <div class="grid">
-    <div class="card">
-      <h3>Zero dependencies</h3>
-      <p>The core has no runtime dependencies, no node: modules, and makes no
-      assumption about its host. It runs in browsers, Node, Deno, Bun, Web
-      Workers, and edge runtimes.</p>
+test(<span class="str">'hero animation frame 30 is stable'</span>, <span class="kw">async</span> () => {
+  <span class="kw">const</span> { data } = <span class="kw">new</span> <span class="fn">ImageSurface</span>(256, 256).<span class="fn">render</span>(<span class="fn">parse</span>(json), 30);
+  <span class="kw">const</span> hash = <span class="fn">createHash</span>(<span class="str">'sha256'</span>).<span class="fn">update</span>(data).<span class="fn">digest</span>(<span class="str">'hex'</span>);
+  <span class="fn">expect</span>(hash).<span class="fn">toMatchSnapshot</span>();
+});</code></pre>
+      </div>
     </div>
-    <div class="card">
-      <h3>Server rendering</h3>
-      <p>A pure JavaScript rasterizer renders animations to RGBA pixels and PNG
-      on the server. No headless browser, no native bindings.</p>
-    </div>
-    <div class="card">
-      <h3>CSP-safe</h3>
-      <p>No eval, no Function constructor, no inline script tricks. It works
-      under the strictest Content Security Policy.</p>
-    </div>
-    <div class="card">
-      <h3>Three surfaces, one scene</h3>
-      <p>Canvas2D for playback, SVG strings for static output, raw pixels for
-      servers. All three draw the same renderer-agnostic scene.</p>
-    </div>
-    <div class="card">
-      <h3>Embeddable anywhere</h3>
-      <p>The evaluated scene is plain data: matrices, cubic contours, paints.
-      Feed it to Skia in React Native, WebGL, or any custom backend.</p>
-    </div>
-    <div class="card">
-      <h3>Small and disposable</h3>
-      <p>A fraction of the size of lottie-web, with a real destroy() and no
-      leaks. Playback is a thin, clockless driver you can tick by hand.</p>
-    </div>
-  </div>
+  </section>
 
-  <h2>Format coverage</h2>
-  <p>The full 2D vector feature set: shapes with every modifier (trim paths,
-  repeaters, polystars, rounded corners, offset paths with real joins, zig
-  zag, boolean merge paths), gradient fills and strokes with dashes, masks
-  with all seven modes plus opacity and expansion, alpha and luminance track
-  mattes, all blend modes, motion blur, precompositions with time remapping,
-  image layers, slots, and text layers from embedded glyphs with animators
-  and text on a path.</p>
-  <p class="dim">Expressions plug in through an optional evaluator hook, so
-  the core stays eval-free. Layer effects are next on the roadmap.</p>
+  <section id="api">
+    <h2>API reference</h2>
+    <p>Every export in the package, with signatures. TypeScript declarations
+    ship in the box, so all of this autocompletes.</p>
 
-  <h2>Custom renderers</h2>
-  <pre><code><span class="kw">for</span> (<span class="kw">const</span> op <span class="kw">of</span> anim.<span class="fn">sceneAt</span>(frame).ops) {
-  <span class="cm">// op.matrix : [a, b, c, d, tx, ty]</span>
-  <span class="cm">// op.paths  : cubic bezier contours</span>
-  <span class="cm">// op.fills, op.strokes, op.clips, op.blend</span>
-}</code></pre>
+    <div class="api-sig"><span class="fn">parse</span>(source) <span class="ret">→ Animation</span></div>
+    <p>Parse a document into an <code>Animation</code>. Synchronous, no I/O.
+    <code>source</code> is a parsed object, a JSON string, or UTF-8 bytes,
+    so it takes the output of <code>fetch</code>, <code>readFile</code>, or a
+    bundler JSON import as-is.</p>
 
-  <footer>
-    MIT licensed. Built and maintained by
-    <a href="https://github.com/sanyok12345">sanyok12345</a>.
-  </footer>
+    <div class="api-sig"><span class="fn">load</span>(source, options?) <span class="ret">→ Promise&lt;Animation&gt;</span></div>
+    <p>The asynchronous form: fetches a URL (string or <code>URL</code>),
+    otherwise parses directly. Options: <code>fetch</code> to inject a custom
+    fetch, <code>signal</code> to abort.</p>
+
+    <div class="api-sig">anim.<span class="fn">sceneAt</span>(frame?) <span class="ret">→ Scene</span></div>
+    <p><code>Animation</code> is read-only: <code>name</code>,
+    <code>version</code>, <code>width</code>, <code>height</code>,
+    <code>frameRate</code>, <code>inPoint</code>, <code>outPoint</code>,
+    <code>totalFrames</code>, <code>duration</code>, <code>markers</code>.
+    Three methods map time to frames and frames to scenes:</p>
+    <div class="table-scroll"><table>
+      <tr><th>Method</th><th>Returns</th></tr>
+      <tr><td><code>frameAtTime(seconds)</code></td><td>The frame for a wall-clock time, looped over the duration.</td></tr>
+      <tr><td><code>frameAtProgress(t)</code></td><td>The frame for progress <code>0..1</code>: scroll position, a slider, a test point.</td></tr>
+      <tr><td><code>sceneAt(frame?)</code></td><td>The evaluated <code>Scene</code>: flat draw ops for <a href="#recipes">custom renderers</a>.</td></tr>
+    </table></div>
+
+    <div class="api-sig"><span class="kw">new</span> <span class="fn">CanvasSurface</span>(ctx) · <span class="kw">new</span> <span class="fn">SvgSurface</span>() · <span class="kw">new</span> <span class="fn">ImageSurface</span>(width?, height?)</div>
+    <p>Every surface has <code>render(anim, frame?, options?)</code> and
+    <code>dispose()</code>; <code>ImageSurface</code> adds
+    <code>png(anim, frame?, options?)</code> returning PNG bytes. Render
+    options and trade-offs are covered in <a href="#surfaces">Surfaces</a>.
+    <code>encodePNG(rgba, width, height)</code>, the pure-JS PNG encoder, is
+    exported on its own.</p>
+
+    <div class="api-sig"><span class="kw">new</span> <span class="fn">Playback</span>(options) · player.<span class="fn">tick</span>(dtMs) · player.<span class="fn">on</span>(type, cb)</div>
+    <div class="table-scroll"><table>
+      <tr><th>Option</th><th>Default</th><th>Meaning</th></tr>
+      <tr><td><code>animation</code>, <code>surface</code></td><td>required</td><td>What to play and where to draw it.</td></tr>
+      <tr><td><code>loop</code></td><td><code>false</code></td><td>Start over when the end is reached.</td></tr>
+      <tr><td><code>speed</code></td><td><code>1</code></td><td>Rate multiplier.</td></tr>
+      <tr><td><code>mode</code></td><td><code>'forward'</code></td><td><code>'forward'</code>, <code>'reverse'</code>, or <code>'bounce'</code>.</td></tr>
+      <tr><td><code>segment</code></td><td>full range</td><td><code>[from, to]</code> frame window to play.</td></tr>
+      <tr><td><code>autoplay</code></td><td><code>false</code></td><td>Call <code>start()</code> immediately.</td></tr>
+      <tr><td><code>respectReducedMotion</code></td><td><code>false</code></td><td>Hold the first frame for users who prefer reduced motion.</td></tr>
+      <tr><td><code>render</code></td><td><code>{}</code></td><td>Options forwarded to every <code>surface.render</code> call.</td></tr>
+    </table></div>
+    <p>Methods: <code>play()</code>, <code>pause()</code>,
+    <code>seek(frame)</code>, <code>seekTime(seconds)</code>,
+    <code>tick(dtMs)</code>, <code>start()</code>, <code>stop()</code>,
+    <code>destroy()</code>. Properties: <code>frame</code>,
+    <code>playing</code>, <code>progress</code>, <code>finished</code> (a
+    promise). Events: <code>frame</code>, <code>loop</code>,
+    <code>complete</code>, <code>error</code>; <code>on()</code> returns an
+    unsubscribe function.</p>
+
+    <div class="api-sig"><span class="fn">mount</span>(options) <span class="ret">→ Promise&lt;Playback&gt;</span></div>
+    <p>Browser convenience: wires a <code>CanvasSurface</code> and a
+    <code>Playback</code> and starts playing. Options: <code>canvas</code>,
+    <code>src</code> or <code>animation</code>, plus any <code>Playback</code>
+    option.</p>
+
+    <div class="api-sig"><span class="fn">setExpressionEvaluator</span>(fn)</div>
+    <p>Plug in a Lottie expressions engine. The core ships no interpreter and
+    stays eval-free; without an evaluator, expressions fall back to keyframed
+    values.</p>
+  </section>
+
+  <section id="features">
+    <h2>Supported features</h2>
+    <p>Supported across every surface:</p>
+    <div class="cols">
+      <ul>
+        <li>shape layers: paths, ellipses, rectangles, polystars</li>
+        <li>trim paths, both modes</li>
+        <li>repeaters</li>
+        <li>rounded corners, zig zag, pucker and bloat, twist</li>
+        <li>offset paths with real joins</li>
+        <li>merge paths: fills compile to clip stages, stroked shapes get true boolean outlines</li>
+        <li>gradient fills and strokes, linear and radial with highlight</li>
+        <li>strokes with caps, joins, miter limits, and dashes</li>
+        <li>masks: all seven modes plus opacity and expansion</li>
+        <li>track mattes: alpha and luminance, both invertible</li>
+        <li>all blend modes</li>
+        <li>motion blur</li>
+        <li>text layers from embedded glyphs: layout, justification, tracking, boxed text, document keyframes</li>
+        <li>text animators with range selectors, text on a path</li>
+        <li>image layers</li>
+        <li>slots</li>
+        <li>precompositions with bounds clipping and collapse transform</li>
+        <li>time remapping, time stretch</li>
+        <li>full transform stack with layer parenting and auto-orient</li>
+        <li>solid layers</li>
+        <li>bezier easing, per-dimension easing, hold and spatial keyframes</li>
+      </ul>
+    </div>
+    <p>Image layers resolve to data URIs or URLs. <code>CanvasSurface</code>
+    and <code>SvgSurface</code> load them natively; for
+    <code>ImageSurface</code>, pass decoded pixels via
+    <code>render(anim, frame, { images })</code>.</p>
+    <p class="dim">Not yet: layer effects, font-file text without embedded
+    glyphs, and 3D layers.</p>
+  </section>
+
 </main>
+
+<div class="footer-band">
+  <footer>
+    <div>
+      <span class="f-logo">lottie.js</span>
+      <p class="f-note">A dependency-free Lottie engine for every JavaScript
+      runtime. MIT-licensed, built by
+      <a href="https://github.com/sanyok12345" rel="noopener">sanyok12345</a>.</p>
+    </div>
+    <div class="f-links">
+      <a href="https://github.com/sanyok12345/lottie.js" rel="noopener">GitHub</a>
+      <a href="https://www.npmjs.com/package/lottie.js" rel="noopener">npm</a>
+      <a href="https://github.com/sanyok12345/lottie.js/issues" rel="noopener">Issues</a>
+      <a href="https://github.com/sanyok12345/lottie.js/blob/main/LICENSE" rel="noopener">MIT license</a>
+    </div>
+  </footer>
+</div>
+
+<script>
+(function () {
+  var KEY = 'lottiejs-theme';
+  var btn = document.getElementById('theme-toggle');
+  function system() {
+    return matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+  function apply(mode) {
+    document.documentElement.setAttribute('data-theme', mode);
+    btn.setAttribute('aria-label', mode === 'dark' ? 'Switch to light theme' : 'Switch to dark theme');
+  }
+  var saved = null;
+  try { saved = localStorage.getItem(KEY); } catch (e) {}
+  var mode = saved === 'dark' || saved === 'light' ? saved : system();
+  apply(mode);
+  var themingT;
+  btn.addEventListener('click', function () {
+    mode = mode === 'dark' ? 'light' : 'dark';
+    try { localStorage.setItem(KEY, mode); } catch (e) {}
+    document.documentElement.classList.add('theming');
+    apply(mode);
+    clearTimeout(themingT);
+    themingT = setTimeout(function () {
+      document.documentElement.classList.remove('theming');
+    }, 300);
+  });
+
+  addEventListener('load', function () {
+    requestAnimationFrame(function () {
+      document.documentElement.classList.add('smooth');
+    });
+  });
+
+  function esc(t) {
+    return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+  function hl(t) {
+    return esc(t).replace(
+      /(\/\/[^\n]*)|('[^']*')|\b(import|from|const|let|await|async|new|return|export|default|function|if|for|of)\b/g,
+      function (m, cm, str, kw) {
+        if (cm) return '<span class="cm">' + cm + '</span>';
+        if (str) return '<span class="str">' + str + '</span>';
+        return '<span class="kw">' + kw + '</span>';
+      }
+    );
+  }
+
+  var S = { r: 'browser', p: 'npm', f: 'vanilla' };
+  var PKGS = {
+    browser: ['npm', 'pnpm', 'yarn', 'bun', 'cdn'],
+    node: ['npm', 'pnpm', 'yarn'],
+    deno: [],
+    bun: [],
+    worker: ['npm', 'pnpm', 'yarn', 'bun', 'cdn'],
+    edge: ['npm', 'pnpm', 'yarn', 'bun']
+  };
+  var INSTALL = {
+    npm: 'npm install lottie.js',
+    pnpm: 'pnpm add lottie.js',
+    yarn: 'yarn add lottie.js',
+    bun: 'bun add lottie.js',
+    cdn: '// no install: imported straight from jsDelivr'
+  };
+  function spec() {
+    if (S.r === 'deno') return "'npm:lottie.js'";
+    if (S.p === 'cdn') return "'https://cdn.jsdelivr.net/npm/lottie.js/+esm'";
+    return "'lottie.js'";
+  }
+  var CODE = {
+    browser_vanilla: function (sp) { return '<canvas id="c" width="512" height="512"></canvas>\n<script type="module">\n  import { mount } from ' + sp + ';\n  await mount({ canvas: document.getElementById(\'c\'), src: \'/animation.json\', loop: true });\n<\/script>'; },
+    browser_react: function (sp) { return 'import { useEffect, useRef } from \'react\';\nimport { parse, CanvasSurface, Playback } from ' + sp + ';\n\nfunction Lottie({ data, width = 512, height = 512 }) {\n  const ref = useRef(null);\n  useEffect(() => {\n    const player = new Playback({\n      animation: parse(data),\n      surface: new CanvasSurface(ref.current.getContext(\'2d\')),\n      render: { width, height },\n      loop: true,\n      autoplay: true,\n    });\n    return () => player.destroy();\n  }, [data, width, height]);\n  return <canvas ref={ref} width={width} height={height} />;\n}'; },
+    browser_vue: function (sp) { return '<script setup>\nimport { onMounted, onUnmounted, ref } from \'vue\';\nimport { parse, CanvasSurface, Playback } from ' + sp + ';\n\nconst el = ref(null);\nlet player;\nonMounted(() => {\n  player = new Playback({\n    animation: parse(data),\n    surface: new CanvasSurface(el.value.getContext(\'2d\')),\n    loop: true,\n    autoplay: true,\n  });\n});\nonUnmounted(() => player.destroy());\n<\/script>\n\n<template>\n  <canvas ref="el" width="512" height="512" />\n</template>'; },
+    browser_svelte: function (sp) { return '<script>\n  import { onMount } from \'svelte\';\n  import { parse, CanvasSurface, Playback } from ' + sp + ';\n\n  let canvas;\n  onMount(() => {\n    const player = new Playback({\n      animation: parse(data),\n      surface: new CanvasSurface(canvas.getContext(\'2d\')),\n      loop: true,\n      autoplay: true,\n    });\n    return () => player.destroy();\n  });\n<\/script>\n\n<canvas bind:this={canvas} width="512" height="512" />'; },
+    node: function (sp) { return 'import { parse, ImageSurface } from ' + sp + ';\nimport { readFile, writeFile } from \'node:fs/promises\';\n\nconst anim = parse(await readFile(\'animation.json\'));\nawait writeFile(\'frame.png\', await new ImageSurface(512, 512).png(anim, 30));'; },
+    deno: function (sp) { return 'import { parse, ImageSurface } from ' + sp + ';\n\nconst anim = parse(await Deno.readTextFile(\'animation.json\'));\nawait Deno.writeFile(\'frame.png\', await new ImageSurface(512, 512).png(anim, 30));'; },
+    bun: function (sp) { return 'import { parse, ImageSurface } from ' + sp + ';\n\nconst anim = parse(await Bun.file(\'animation.json\').text());\nawait Bun.write(\'frame.png\', await new ImageSurface(512, 512).png(anim, 30));'; },
+    worker: function (sp) { return '// worker.js: rasterize off the main thread, transfer the pixels\nimport { parse, ImageSurface } from ' + sp + ';\n\nlet anim;\nconst surface = new ImageSurface(512, 512);\n\nonmessage = (e) => {\n  if (e.data.json) anim = parse(e.data.json);\n  const { data, width, height } = surface.render(anim, e.data.frame);\n  postMessage({ data, width, height }, [data.buffer]);\n};'; },
+    edge: function (sp) { return 'import { parse, ImageSurface } from ' + sp + ';\nimport animation from \'./animation.json\';\n\nexport default {\n  async fetch() {\n    const png = await new ImageSurface(512, 512).png(parse(animation), 30);\n    return new Response(png, { headers: { \'Content-Type\': \'image/png\' } });\n  }\n};'; }
+  };
+
+  var opts = document.querySelectorAll('.bopt');
+  function renderBuilder() {
+    var allowed = PKGS[S.r];
+    if (allowed.length && allowed.indexOf(S.p) < 0) S.p = allowed[0];
+    var fwEnabled = S.r === 'browser';
+    if (!fwEnabled) S.f = 'vanilla';
+    opts.forEach(function (b) {
+      var k = b.getAttribute('data-k');
+      var v = b.getAttribute('data-v');
+      var disabled = (k === 'p' && (!allowed.length || allowed.indexOf(v) < 0)) || (k === 'f' && !fwEnabled);
+      b.classList.toggle('disabled', disabled);
+      b.classList.toggle('active', !disabled && S[k] === v);
+    });
+    var install = allowed.length
+      ? INSTALL[S.p]
+      : S.r === 'deno'
+        ? '// no install: Deno resolves npm: specifiers'
+        : 'bun add lottie.js';
+    document.querySelector('#out-install code').innerHTML = hl(install);
+    var key = S.r === 'browser' ? 'browser_' + S.f : S.r;
+    document.querySelector('#out-code code').innerHTML = hl(CODE[key](spec()));
+  }
+  opts.forEach(function (b) {
+    b.addEventListener('click', function () {
+      if (b.classList.contains('disabled')) return;
+      S[b.getAttribute('data-k')] = b.getAttribute('data-v');
+      renderBuilder();
+    });
+  });
+  renderBuilder();
+
+  var navLinks = document.querySelector('.nav-links');
+  navLinks.querySelectorAll('a').forEach(function (a) {
+    a.addEventListener('click', function () {
+      navLinks.scrollTo({ left: a.offsetLeft - navLinks.offsetLeft - 4, behavior: 'smooth' });
+    });
+  });
+
+  var sections = document.querySelectorAll('main section[id]');
+  var currentId = location.hash.slice(1) || null;
+  function setCurrent(id) {
+    if (id === currentId) return;
+    currentId = id;
+    if (id) history.replaceState(null, '', '#' + id);
+    else history.replaceState(null, '', location.pathname + location.search);
+    navLinks.querySelectorAll('a').forEach(function (a) {
+      var cur = id && a.getAttribute('href') === '#' + id;
+      a.classList.toggle('current', !!cur);
+      if (cur) {
+        navLinks.scrollTo({ left: a.offsetLeft - navLinks.offsetLeft - 4, behavior: 'smooth' });
+      }
+    });
+  }
+  var spy = new IntersectionObserver(function (entries) {
+    entries.forEach(function (en) {
+      if (en.isIntersecting) setCurrent(en.target.id);
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+  sections.forEach(function (sec) { spy.observe(sec); });
+  var topSpy = new IntersectionObserver(function (entries) {
+    entries.forEach(function (en) {
+      if (en.isIntersecting) setCurrent(null);
+    });
+  }, { rootMargin: '0px 0px -80% 0px' });
+  topSpy.observe(document.querySelector('.band'));
+
+  document.querySelectorAll('main section[id] > h2').forEach(function (h) {
+    var a = document.createElement('a');
+    a.className = 'h-anchor';
+    a.href = '#' + h.parentElement.id;
+    a.textContent = '#';
+    a.setAttribute('aria-label', 'Link to section');
+    h.appendChild(a);
+  });
+
+  document.querySelectorAll('.tabgroup').forEach(function (group) {
+    var tabs = group.querySelectorAll('.tabs .tab');
+    var panes = group.querySelectorAll('.tabpane');
+    tabs.forEach(function (tab) {
+      tab.addEventListener('click', function () {
+        var key = tab.getAttribute('data-t');
+        tabs.forEach(function (t) { t.classList.toggle('active', t === tab); });
+        panes.forEach(function (p) { p.classList.toggle('active', p.getAttribute('data-t') === key); });
+        if (group.id === 'env-group') applyEnv(key);
+      });
+    });
+  });
+
+  document.querySelectorAll('.pre-wrap, .install').forEach(function (wrap) {
+    var b = document.createElement('button');
+    b.className = 'copy';
+    b.setAttribute('aria-label', 'Copy to clipboard');
+    var icons = {
+      copy: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+      ok: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>'
+    };
+    b.innerHTML = icons.copy;
+    b.addEventListener('click', function () {
+      var text = wrap.classList.contains('install')
+        ? 'npm install lottie.js'
+        : wrap.querySelector('pre').innerText;
+      navigator.clipboard.writeText(text).then(function () {
+        b.innerHTML = icons.ok;
+        b.classList.add('ok');
+        setTimeout(function () { b.innerHTML = icons.copy; b.classList.remove('ok'); }, 1200);
+      });
+    });
+    wrap.appendChild(b);
+    if (wrap.classList.contains('install')) {
+      wrap.addEventListener('click', function (e) {
+        if (e.target.closest('.copy')) return;
+        b.click();
+      });
+    }
+  });
+})();
+</script>
+<script type="module">
+import { parse, CanvasSurface, SvgSurface, ImageSurface, Playback } from 'https://cdn.jsdelivr.net/npm/lottie.js/+esm';
+
+const stage = document.getElementById('pg-stage');
+const canvas = document.getElementById('pg-canvas');
+const svgHost = document.getElementById('pg-svg');
+const playBtn = document.getElementById('pg-play');
+const scrub = document.getElementById('pg-scrub');
+const frameLabel = document.getElementById('pg-frame');
+const note = document.getElementById('pg-note');
+const fileInput = document.getElementById('pg-file');
+const iPlay = playBtn.querySelector('.i-play');
+const iPause = playBtn.querySelector('.i-pause');
+
+let mode = 'canvas';
+let player = null;
+let anim = null;
+let size = { w: 512, h: 512 };
+const canvasSurface = new CanvasSurface(canvas.getContext('2d'));
+const svgSurface = new SvgSurface();
+
+const surface = {
+  render(a, frame) {
+    if (mode === 'canvas') canvasSurface.render(a, frame, { width: size.w, height: size.h });
+    else svgHost.innerHTML = svgSurface.render(a, frame, { width: size.w, height: size.h });
+  },
+  dispose() {},
+};
+
+function setPlayingUI(playing) {
+  iPlay.style.display = playing ? 'none' : '';
+  iPause.style.display = playing ? '' : 'none';
+  playBtn.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+}
+
+function setAnimation(a, label) {
+  if (player) { player.destroy(); player = null; }
+  anim = a;
+  const s = 512 / Math.max(a.width, a.height);
+  size = { w: Math.round(a.width * s), h: Math.round(a.height * s) };
+  canvas.width = size.w;
+  canvas.height = size.h;
+  scrub.max = String(Math.max(1, Math.ceil(a.totalFrames) - 1));
+  scrub.value = '0';
+  player = new Playback({ animation: a, surface, loop: true, autoplay: true });
+  player.on('frame', ({ frame }) => {
+    const f = Math.floor(frame);
+    scrub.value = String(f);
+    frameLabel.textContent = f + ' / ' + Math.round(a.totalFrames);
+  });
+  player.on('error', () => { note.textContent = 'Could not render this document.'; });
+  setPlayingUI(true);
+  if (label) {
+    note.textContent = label + ' · ' + a.width + '×' + a.height + ' · ' +
+      a.frameRate + ' fps · ' + Math.round(a.totalFrames) + ' frames';
+  }
+}
+
+playBtn.addEventListener('click', () => {
+  if (!player) return;
+  if (player.playing) { player.pause(); setPlayingUI(false); }
+  else { player.play(); setPlayingUI(true); }
+});
+
+scrub.addEventListener('input', () => {
+  if (!player) return;
+  player.pause();
+  setPlayingUI(false);
+  player.seek(Number(scrub.value));
+  frameLabel.textContent = scrub.value + ' / ' + Math.round(anim.totalFrames);
+});
+
+document.querySelectorAll('[data-surface]').forEach((b) => {
+  b.addEventListener('click', () => {
+    mode = b.getAttribute('data-surface');
+    document.querySelectorAll('[data-surface]').forEach((x) => x.classList.toggle('active', x === b));
+    canvas.hidden = mode !== 'canvas';
+    svgHost.hidden = mode !== 'svg';
+    if (player && anim) surface.render(anim, player.frame);
+  });
+});
+
+async function openFile(file) {
+  try {
+    let text;
+    if (/\.tgs$/i.test(file.name)) {
+      text = await new Response(
+        file.stream().pipeThrough(new DecompressionStream('gzip'))
+      ).text();
+    } else {
+      text = await file.text();
+    }
+    setAnimation(parse(text), file.name);
+  } catch (e) {
+    note.textContent = 'Could not read ' + file.name + ': not a Lottie document?';
+  }
+}
+
+document.getElementById('pg-open').addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', () => {
+  if (fileInput.files[0]) openFile(fileInput.files[0]);
+});
+['dragenter', 'dragover'].forEach((t) => stage.addEventListener(t, (e) => {
+  e.preventDefault();
+  stage.classList.add('dragging');
+}));
+['dragleave', 'drop'].forEach((t) => stage.addEventListener(t, (e) => {
+  e.preventDefault();
+  stage.classList.remove('dragging');
+}));
+stage.addEventListener('drop', (e) => {
+  const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) openFile(f);
+});
+
+function initDemos(a) {
+  const hoverCanvas = document.getElementById('hover-canvas');
+  const hoverPlayer = new Playback({
+    animation: a,
+    surface: new CanvasSurface(hoverCanvas.getContext('2d')),
+    loop: true,
+    render: { width: 192, height: 192 },
+  });
+  hoverPlayer.seek(0);
+  const hoverBtn = document.getElementById('hover-btn');
+  hoverBtn.addEventListener('mouseenter', () => hoverPlayer.play());
+  hoverBtn.addEventListener('mouseleave', () => hoverPlayer.pause());
+
+  const scrollCanvas = document.getElementById('scroll-canvas');
+  const scrollSurface = new CanvasSurface(scrollCanvas.getContext('2d'));
+  scrollSurface.render(a, 0, { width: 240, height: 240 });
+  const box = document.getElementById('scroll-box');
+  box.addEventListener('scroll', () => {
+    const t = box.scrollTop / (box.scrollHeight - box.clientHeight);
+    scrollSurface.render(a, a.frameAtProgress(Math.min(1, Math.max(0, t))), { width: 240, height: 240 });
+  }, { passive: true });
+
+  document.getElementById('og-run').addEventListener('click', async () => {
+    const meta = document.getElementById('og-meta');
+    meta.textContent = 'rendering…';
+    const t0 = performance.now();
+    const png = await new ImageSurface(600, 315).png(a, 45);
+    const ms = Math.max(1, Math.round(performance.now() - t0));
+    const img = document.getElementById('og-img');
+    img.src = URL.createObjectURL(new Blob([png], { type: 'image/png' }));
+    img.hidden = false;
+    meta.textContent = '600×315 · ' + (png.length / 1024).toFixed(1) + ' kB · ' + ms + ' ms · pure JS, no browser APIs';
+  });
+
+  const tgsInput = document.getElementById('tgs-file');
+  document.getElementById('tgs-open').addEventListener('click', () => tgsInput.click());
+  tgsInput.addEventListener('change', async () => {
+    const f = tgsInput.files[0];
+    if (!f) return;
+    const meta = document.getElementById('tgs-meta');
+    meta.textContent = 'decompressing…';
+    try {
+      const text = await new Response(
+        f.stream().pipeThrough(new DecompressionStream('gzip'))
+      ).text();
+      const a2 = parse(text);
+      const s = 512 / Math.max(a2.width, a2.height);
+      const png = await new ImageSurface(Math.round(a2.width * s), Math.round(a2.height * s)).png(a2, 0);
+      const img = document.getElementById('tgs-img');
+      img.src = URL.createObjectURL(new Blob([png], { type: 'image/png' }));
+      img.hidden = false;
+      meta.textContent = f.name + ' → PNG, frame 0';
+    } catch (e) {
+      meta.textContent = 'Could not read ' + f.name + ': not a .tgs sticker?';
+    }
+  });
+
+  document.getElementById('test-run').addEventListener('click', async () => {
+    const out = document.getElementById('test-out');
+    out.textContent = 'hashing…';
+    const hash = async () => {
+      const { data } = new ImageSurface(256, 256).render(a, 30);
+      const d = await crypto.subtle.digest('SHA-256', data);
+      return Array.from(new Uint8Array(d).slice(0, 6))
+        .map((b) => b.toString(16).padStart(2, '0')).join('');
+    };
+    const h1 = await hash();
+    const h2 = await hash();
+    out.textContent = h1 + '… = ' + h2 + '…' + (h1 === h2 ? ' · deterministic' : '');
+  });
+}
+
+fetch('./demo.json')
+  .then((r) => r.text())
+  .then((t) => {
+    const a = parse(t);
+    setAnimation(a);
+    initDemos(a);
+  })
+  .catch(() => { note.textContent = 'Could not load the demo animation.'; });
+</script>
 </body>
 </html>
