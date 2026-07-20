@@ -125,6 +125,7 @@
   .badge b { background: var(--badge-label); color: #fff; padding: 9px 10px; font-weight: 600; }
   .badge i { background: var(--badge-body); color: var(--badge-body-text); padding: 9px 12px; font-style: normal; }
   .badge.blue b { background: #0070f0; }
+  .badge.spon b { background: #bf3989; }
   .badge:hover { filter: brightness(.92); }
 
   h1.tagline {
@@ -302,6 +303,10 @@
     table { display: block; overflow-x: auto; white-space: nowrap; }
     table td, table th { white-space: normal; min-width: 130px; }
     .footer-band footer { padding: 16px 18px 32px; }
+    .band-top { flex-wrap: nowrap; align-items: center; gap: 10px; }
+    .badges { gap: 6px; flex-wrap: nowrap; }
+    .badge i { display: none; }
+    .badge.spon b { width: 35px; height: 35px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 16px; }
   }
   .pg { border: 1px solid var(--line); border-top: none; background: var(--card); padding: 18px; display: grid; gap: 14px; }
   .pg-stage {
@@ -369,6 +374,21 @@
   .api-sig .ret { color: #8a8a8a; }
   .api-sig .fn { color: #7cc7ff; }
 
+  .sponsor {
+    margin: 60px 0 0; border: 1px solid var(--line); border-left: 5px solid var(--yellow);
+    background: var(--card); padding: 20px 22px;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; justify-content: space-between;
+  }
+  .sponsor strong { font-size: 17px; }
+  .sponsor p { margin: 4px 0 0; font-size: 15px; color: var(--muted); max-width: 470px; }
+  .sponsor-btn {
+    flex: 0 0 auto; background: var(--yellow); color: #000; font-weight: 700;
+    padding: 10px 18px; margin: 0; border-radius: 0; text-decoration: none; white-space: nowrap;
+  }
+  .sponsor-btn:hover { background: #000; color: var(--yellow); }
+  html[data-theme="dark"] .sponsor-btn:hover { background: #fff; color: #000; }
+  @media (prefers-color-scheme: dark) { html:not([data-theme="light"]) .sponsor-btn:hover { background: #fff; color: #000; } }
+
   .footer-band { border-top: 4px solid var(--yellow); margin-top: 72px; }
   footer {
     max-width: 760px; margin: 0 auto; padding: 28px 24px 44px;
@@ -394,6 +414,7 @@
       <div class="badges">
         <a class="badge" href="https://github.com/sanyok12345/lottie.js" rel="noopener"><b>git</b><i>GitHub</i></a>
         <a class="badge blue" href="https://www.npmjs.com/package/lottie.js" rel="noopener"><b>npm</b><i>lottie.js</i></a>
+        <a class="badge spon" href="https://github.com/sponsors/sanyok12345" rel="noopener"><b>&hearts;</b><i>Sponsor</i></a>
       </div>
     </div>
     <h1 class="tagline">A fast, <strong>dependency-free</strong> Lottie engine
@@ -847,6 +868,15 @@ test(<span class="str">'hero animation frame 30 is stable'</span>, <span class="
     glyphs, and 3D layers.</p>
   </section>
 
+  <div class="sponsor">
+    <div>
+      <strong>Sponsor lottie.js</strong>
+      <p>Free and MIT-licensed, forever. If it renders in your product,
+      sponsoring keeps it maintained and moving.</p>
+    </div>
+    <a class="sponsor-btn" href="https://github.com/sponsors/sanyok12345" rel="noopener">Sponsor &rarr;</a>
+  </div>
+
 </main>
 
 <div class="footer-band">
@@ -858,6 +888,7 @@ test(<span class="str">'hero animation frame 30 is stable'</span>, <span class="
       <a href="https://github.com/sanyok12345" rel="noopener">sanyok12345</a>.</p>
     </div>
     <div class="f-links">
+      <a href="https://github.com/sponsors/sanyok12345" rel="noopener">Sponsor</a>
       <a href="https://github.com/sanyok12345/lottie.js" rel="noopener">GitHub</a>
       <a href="https://www.npmjs.com/package/lottie.js" rel="noopener">npm</a>
       <a href="https://github.com/sanyok12345/lottie.js/issues" rel="noopener">Issues</a>
