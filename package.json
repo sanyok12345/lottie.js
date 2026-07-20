@@ -1,6 +1,6 @@
 {
   "name": "lottie.js",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "A fast, dependency-free Lottie engine for every JavaScript runtime and environment",
   "type": "module",
   "main": "./dist/lottie.cjs",
@@ -22,7 +22,7 @@
     "type": "git",
     "url": "git+https://github.com/sanyok12345/lottie.js.git"
   },
-  "homepage": "https://github.com/sanyok12345/lottie.js#readme",
+  "homepage": "https://lottie.js.org",
   "bugs": "https://github.com/sanyok12345/lottie.js/issues",
   "funding": "https://github.com/sponsors/sanyok12345",
   "scripts": {
